@@ -8,7 +8,7 @@ DrCOM FOR HC5661
 首先，刷打开了ssh的固件，通俗说为root （详细参考www.hiwifimi.com)，版本 0.9003.2446s <br>
 下载连接 http://www.hiwifimi.com/root/%E6%9E%81%E5%A3%B9s2446root.zip
 
-1.修改/etc/drcom.conf中的认证地址，用户名，密码，和在网络中心注册时填写的mac，注意mac按范例格式写
+* 修改/etc/drcom.conf中的认证地址，用户名，密码，和在网络中心注册时填写的mac，注意mac按范例格式写
 
     server = "192.168.100.150" # 这里填写认证服务器ip
     username = "" # 上网的用户名
@@ -20,12 +20,12 @@ DrCOM FOR HC5661
     mac = 0xb888e3051680 # 学校绑定的mac地址，注意按照左边的格式写，如果您的mac是121212121212，则写成0x121212121212
 
 
-2.可用scp或者ftp的方式，覆盖本压缩包内所有的文件到 / (根目录)
+* 可用scp或者ftp的方式，覆盖本压缩包内所有的文件到 / (根目录)
   (windows用户安装winscp，选择scp方式，账号root密码为路由器密码)
   
-3.在ssh下执行下列命令(windows下可用putty连接)
+* 在ssh下执行下列命令(windows下可用putty连接)
   1. opkg update
   2. opkg install python-mini （注意安装的应该是python2.7.3以上的版本）   
   3. chmod +x /usr/bin/dog_drcom 
   
-4.重启路由器
+* 重启路由器
