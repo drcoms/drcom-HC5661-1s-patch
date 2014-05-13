@@ -1,0 +1,68 @@
+<%
+local ver  = require "luci.version"
+local http = require "luci.http"
+local util  = require "luci.util"
+
+local autotype = util.fliter_unsafe(http.formvalue("autotype"))
+
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>极路由｜首次安装－联系宽带服务商</title>
+<link rel="stylesheet" href="<%=resource%>/guide/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script src="<%=resource%>/guide/js/jquery-1.8.2.min.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/application.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+	<div id="page">
+		<div id="header">
+			<h1><span id="logo">极路由｜首次安装</span></h1>
+		</div><!-- /header -->
+				
+		<div id="content">
+			<div class="contact">
+				<h2>找回宽带上网账号</h2>
+				<p>联系宽带服务商</p>
+				<div class="calls">
+					<ul class="J_list">
+						<li><a href="#">10000</a>中国电信宽带客服</li>
+						<li><a href="#">10010</a>中国联通宽带客服</li>
+						<li><a href="#">10086</a>中国移动铁通宽带客服</li>
+						<li><a href="#">96196</a>歌华有线带客服</li>
+						<li><a href="#">95079</a>长城宽带客服1</li>
+						<li style="display: none"><a href="#">96090090</a>长城宽带客服2</li>
+						<li style="display: none"><a href="#">01082529990</a>方正宽带客服</li>
+						<li style="display: none"><a href="#">96877</a>有线通客服</li>
+						<li style="display: none"><a href="#">057196171</a>华数宽带客服</li>
+						<li style="display: none"><a href="#">96007</a>宽带通客服</li>
+					</ul>
+					<div class="more"><a href="#" class="J_more">更多</a></div>
+				</div>
+				<a href="<%=luci.dispatcher.build_url("admin_web", "guide", "pppoe")%>?autotype=<%=autotype%>" class="btn radius">去拨号</a>
+			</div>
+		</div><!-- /content -->
+				
+		<div id="footer">
+		</div><!-- /footer -->
+	</div><!-- /page -->
+</body>
+
+<script type="text/javascript">
+$(function(){
+    var sUserAgent = navigator.userAgent.toLowerCase();
+    
+    var bIsIphoneOs = sUserAgent.match(/iphone os/i) == "iphone os";  
+    var bIsAndroid = sUserAgent.match(/android/i) == "android";
+    var bIsWM = sUserAgent.match(/windows mobile/i) == "windows mobile";  
+    $(".J_list a").each(function(){
+        var phone = $(this).text();
+        if(bIsIphoneOs){$(this).attr('href', 'callto:'+phone)}
+        if(bIsAndroid){$(this).attr('href', 'wtai://wp/mc;'+phone)}
+        if(bIsWM){$(this).attr('href', 'tel:'+phone)}
+    })
+})
+</script>
+</html>

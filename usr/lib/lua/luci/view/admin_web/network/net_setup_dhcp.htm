@@ -1,0 +1,311 @@
+<%
+--[[
+	Info	lan 口设置
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local ver  = require "luci.version"
+local adv_menu = luci.util.get_adv_menu()
+local request_uri = luci.http.getenv("REQUEST_URI")
+
+
+local bind_ipReq={}
+local bind_macReq={}
+
+
+-- 获取 mac 与 ip 地址绑定
+
+local uci = require "luci.model.uci"
+_uci_real  = uci.cursor()
+
+local uci_name
+local i
+for i=1,5 do 
+	uci_name = "host_"..i
+	bind_ipReq[i] = _uci_real:get("dhcp", uci_name, "ip")
+	bind_macReq[i] = _uci_real:get("dhcp", uci_name, "mac")
+end 
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/validators.min.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+
+<style type="text/css">
+	table.zone td.tor{
+		text-align: right;
+		width:120px;
+		line-height:14px;
+	}
+</style>
+<body>
+<div class="title">
+	<h2>高级设置<i>设置路由器安全 , 及其他高级设置</i></h2>
+</div>
+<div class="menu">
+	<% luci.util.output_adv_menu() %>
+</div>
+
+<div class="box setup_box">
+	<form id="form1"> 
+	<ul class="ullist">
+	<li>
+		<div class="memu row tie">
+			<p class="item-txt"><span class="on-off" style="font-size:14px;">开关<button type="button" class="on" style="margin-left:20px;">开关</button></span></p>
+			<div id="loading">读取中...</div>
+			<div style="display:none;" id="dhcp_box">
+			<p> <span style="font-size:14px;margin-right:20px;">IP 分配范围 </span> <span class="ip_split"></span><input type="text" value="" name="start" style="width:30px;"/> 到 <span class="ip_split"></span><input type="text" name="end" value="" style="width:30px;"/></p>
+				<input type="hidden" name="limit" value="" style="width:30px;"/>
+				<p><span style="font-size:14px;margin-right:20px;">租用时间</span> <input type="text" value="12" name="leasetime_num" style="width:30px;"/>
+				<select name="leasetime_unit">
+					<option value="m">分钟</option>
+					<option value="h">小时</option>
+				</select></p>
+			<input type="hidden" value="" name="leasetime"/>
+			<input type="hidden" value="" name="ignore"/>
+				<p style="margin-bottom:0px;">IP 与 MAC地址绑定</p>
+				<table cellspacing="5" cellpadding="5" id="bind_box">
+                     <tr>
+                         <td width="10" align="left"></th>
+                         <td width="150" align="left">IP 地址</th>
+                         <td width="150" align="left">MAC 地址</th>
+                         <td>&nbsp;</td>
+                     </tr>
+                     <%
+                     local out_ip
+                     local out_mac
+                     for i=1,5 do 
+                     	out_ip = ""
+                     	out_mac = ""
+                     	if bind_ipReq[i] then 
+                     		out_ip = bind_ipReq[i]
+                    	end 
+                    	if bind_macReq[i] then 
+                     		out_mac = bind_macReq[i]
+                    	end 
+					 %>
+					<tr>
+                     	<td><%luci.http.write_json(i)%></td>
+                     	<td><input type="text" maxlength="45" size="15" class="port txt" name="bind_ip<%luci.http.write_json(i)%>" value="<%luci.http.write(out_ip)%>"/></td>
+                     	<td><input type="text" maxlength="45" size="15" class="port txt" name="bind_mac<%luci.http.write_json(i)%>" value="<%luci.http.write(out_mac)%>"/></td>
+                     </tr>	
+					<%
+					end 
+                    %>
+                </table>
+			</div>
+		</div>
+	</li>
+	<li>
+		<div class="btnbox" style="display:none;padding: 0 0 0 20px;" id="dhcp_btn_box">
+			<input type="button" value="<%:保存%>" class="btn" id="submit_btn" disabled="disabled"/>
+			<img style="display:none;" id="loading2" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器" />
+		</div>
+	</li>
+	<li>
+	<%
+	local net = require "hiwifi.net"
+	local devicesResp = net.get_dhcp_client_list()
+	%>
+	<div style="padding:20px 0 0 20px;display:none;" id="dhcp_list_box">
+		<h4 style="font-size:14px;font-weight:400; margin-bottom:10px;">DHCP 设备列表:</h4>
+		<table width="480" border="1" cellpadding="0" cellspacing="0" bordercolor="#f0f0f0">
+			<tr align="center">
+				<th width="110" scope="col" bgcolor="#f4f4f4">IP</th>
+				<th width="110" scope="col" bgcolor="#f4f4f4">MAC地址</th>
+				<th width="*" scope="col" bgcolor="#f4f4f4">设备名称</th>
+			</tr>
+			<%
+			for i,v in ipairs(devicesResp) do
+			%>
+			<tr align="center">
+				<td><%=v['ip']%></td>
+				<td><%=v['mac']%></td>
+				<td align="center" id="mac_<%=string.gsub(v['mac'],":","")%>_box"><%if v['name']=="" then luci.http.write("未知") else luci.http.write(v['name']) end%></td>
+			</tr>
+			<%
+			end
+			%>
+		</table>
+	</div>
+	</li>
+	</ul>	
+	</form>
+</div>
+<script type="text/javascript">
+$(function(){
+	function ipBox(ip){
+		var ip_split="";
+		var strs = ip.split("."); //字符分割      
+		for (var i=0;i<strs.length-1;i++ )    
+	    {    
+			ip_split=ip_split+strs[i]+".";    //分割后的字符输出
+	    }
+		$(".ip_split").html(ip_split);
+	}
+	//$.ajaxSettings.async = false;
+	//network/get_lan_info 
+	if(top.global_lan_ipv4){
+		ipBox(top.global_lan_ipv4)
+	}else{
+		var request_date = {}; 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "network","get_lan_info")%>",request_date,function(rsp) 
+		{
+			if(rsp.code == 0 && rsp.ipv4[0]){
+				ipBox(rsp.ipv4[0]['ip'])		
+			}else{
+				art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+			}
+		});
+	}
+	
+	
+	//network/get_lan_dhcp_status 
+	var request_date = {}; 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "network","get_lan_dhcp_status")%>",request_date,function(rsp) 
+	{ 
+		$("#submit_btn").attr("disabled",false);
+		if(rsp.code == 0){
+			//auto fill--  
+			$("input[name='start']").val(rsp.start);  
+			$("input[name='limit']").val(rsp.limit);  
+			$("input[name='end']").val(parseInt(rsp.start)+parseInt(rsp.limit)-1);
+			
+			$("input[name='leasetime_num']").val(rsp.leasetime_num); 
+			$("select[name='leasetime_unit']").val(rsp.leasetime_unit); 
+			$("input[name='leasetime']").val(rsp.leasetime);
+				
+			var dhcp_ignore = rsp.ignore;
+			if (dhcp_ignore == "1"){
+				swich_status(0);
+			} else {
+				swich_status(1);
+			}
+		}else{
+			art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+		}
+	})
+	
+	//开关
+	$(".on-off").click(function(){
+		var switch_b = $(this).children("button");
+		var status_now = switch_b.attr("class");
+		var ignore = "";
+		if(status_now == "on"){
+			ignore="1";
+ 		} else {
+ 			ignore="0";
+ 		}
+		$("#loading2").show();
+		$("input[name='leasetime']").val($("input[name='leasetime_num']").val()+$("select[name='leasetime_unit']").val())
+		$("input[name='ignore']").val(ignore);
+		$("input[name='limit']").val(parseInt($("input[name='end']").val())-parseInt($("input[name='start']").val())+1);
+		
+		var request_date = $("#form1").serializeArray(); 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "network","set_lan_dhcp_status")%>",request_date,function(rsp) 
+		{
+			if(status_now == "on"){
+				swich_status(0);
+	 		} else {
+	 			swich_status(1);
+	 		}
+			$("#loading2").hide();	
+		})
+	})
+	
+	//提交
+	$("#submit_btn").click(function(){
+		
+		if($("input[name='start']").val() == "" || $("input[name='end']").val() == "" || $("input[name='leasetime_num']").val() == ""){
+			art.dialog({icon:"error",title:false,content:"IP 地址和租用时间不能为空."}).lock().time(4);
+		} else if(!validators.uinteger($("input[name='start']").val()) || !validators.uinteger($("input[name='end']").val()) || !validators.uinteger($("input[name='leasetime_num']").val()) ) {
+			art.dialog({icon:"error",title:false,content:"IP 分配范围 和 租用时间必须是正整数."}).lock().time(4);
+		} else if(parseInt($("input[name='start']").val())>parseInt($("input[name='end']").val())){
+			art.dialog({icon:"error",title:false,content:"IP 分配范围不正确."}).lock().time(4);
+		} else {
+			$("#loading2").show();
+			$("#submit_btn").attr("disabled",true);
+			$("input,select").attr("readonly",true);
+			$("input[name='leasetime']").val($("input[name='leasetime_num']").val()+$("select[name='leasetime_unit']").val())
+			$("input[name='limit']").val(parseInt($("input[name='end']").val())-parseInt($("input[name='start']").val())+1);
+
+			var request_date =  $("#form1").serializeArray(); 
+			$.getJSON("<%=luci.dispatcher.build_url("api", "network","set_lan_dhcp_status")%>",request_date,function(rsp) 
+			{
+				$("#loading2").hide();
+				$("#submit_btn").attr("disabled",false);
+				$("input,select").attr("readonly",false);
+				if(rsp.code == 0){
+					window.parent.art.dialog({icon:"succeed",title:false,content:"修改成功  "}).lock().time(4);
+				} else {
+					art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+				}
+			})
+		}
+	})
+	
+	function swich_status(status){
+		if (status == 1 || status == "1"){
+			$("#loading").hide();
+			$("#dhcp_box").show();
+			$("#dhcp_list_box").show();
+			$("#dhcp_btn_box").show();
+			var switch_b = $(".on-off").children("button");
+			switch_b.addClass("on");
+			switch_b.removeClass("off");
+		} else {
+			$("#loading").html("DHCP 服务未打开").show();
+			$("#dhcp_box").hide();
+			$("#dhcp_list_box").hide();
+			$("#dhcp_btn_box").hide();
+			var switch_b = $(".on-off").children("button");
+			switch_b.addClass("off");
+			switch_b.removeClass("on");
+		}
+	}
+	
+	//动态对dhcp表中的设备是wifi连接的进行标示
+	function check_wifi_drivers(){
+		var request_date = {"device":"radio0.network1"}; 
+		var wifi_icon = "<span><img src=\"<%=resource%>/web/images/signal4.png\"></span>"
+		$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_connected_devices_list")%>",request_date,function(rsp) 
+		{ 
+			var d_mac;
+			if(rsp.code == 0){
+				var device_list = rsp.connected_devices;
+				for(var i=0;i<device_list.length;i++){
+					d_mac = device_list[i].mac;
+					var mac_id = $("#mac_"+d_mac.replace(/:/g,'')+"_box");
+					if(mac_id){
+						mac_id.html(mac_id.html()+wifi_icon);
+					}
+				}
+			}
+		})
+	}
+	
+	$("#bind_add").click(function(){
+        $("#bind_box").append('<tr class="pf_box_v">'+
+            '<td>'+ip+'</td>'+
+            '<td><input type="text" maxlength="5" size="5" class="port txt" name="src_dport[]"/></td>'+
+            '<td><input type="text"  class="ip txt" name="dest_ip[]" /></td>'+
+            '<td><input type="text" maxlength="5" size="5" class="port txt" name="dest_port[]" /></td>'+
+            '<td><input type="button" class="pf_del" value="删除" /></td>'+
+        '</tr>');
+         bind_remove();
+    })
+
+	check_wifi_drivers();
+});
+</script>
+</body>
+</html>

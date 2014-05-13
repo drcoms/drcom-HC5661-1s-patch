@@ -1,0 +1,387 @@
+<%
+--[[
+	Info	锐捷
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2013
+]]--
+
+local ver  = require "luci.version"
+local s = require "luci.tools.status"
+local http = require "luci.http"
+	
+	os.execute('mkdir /tmp/data/mentohust')
+	if nixio.fs.access("/tmp/data/mentohust") then
+		os.execute('ln -s /tmp/data/mentohust /etc')
+	end
+	
+	local mentohust_datafile_mpf_path = "/etc/mentohust/mentohust.mpf"
+	local mentohust_datafile_8021x_path = "/etc/mentohust/8021x.exe"
+	local mentohust_datafile_SuConfig_path = "/etc/mentohust/SuConfig.dat"
+	local mentohust_datafile_W32N55_path = "/etc/mentohust/W32N55.dll"
+	local mentohust_tagfile = "/tmp/mentohust_upfile_tag"
+
+	-- 参数
+	-- 上传文件 
+	local fp
+	local fd
+	local io = require "io"
+	
+	local up_files = {
+		{n="mentohust.mpf", ns="mentohust",		p="/etc/mentohust/mentohust.mpf"},
+		{n="8021x.exe",		ns="8021x",			p="/etc/mentohust/8021x.exe"},
+		{n="SuConfig.dat",	ns="SuConfig",		p="/etc/mentohust/SuConfig.dat"},
+		{n="W32N55.dll",	ns="W32N55",		p="/etc/mentohust/W32N55.dll"}
+	}
+	
+	-- 此段必须放在最前
+	
+	if not nixio.fs.access(mentohust_tagfile) then 
+		os.execute("echo '' > "..mentohust_tagfile)
+	end
+	local fd = io.open(mentohust_tagfile, "r")
+	local mentohust_tagfile_ln = fd:read("*l")
+	if mentohust_tagfile_ln == "1" then 	-- 此标示在提交前设置
+		luci.http.setfilehandler(
+			function(meta, chunk, eof)
+				if not fp then
+					for i,v in ipairs(up_files) do
+						if meta and meta.name == "datafile_"..v['ns'] then
+							fp = io.open(v['p'], "w")
+						end
+					end
+				end
+				if chunk then
+					fp:write(chunk)
+				end
+				if eof then
+					fp:close()
+					fp=nil
+					os.execute("echo '' > "..mentohust_tagfile)
+				end
+			end
+		)
+	end 
+	
+	local act_submit = tostring(luci.http.formvalue("act_submit"))
+	local codeResp = 0
+	local msgResp = ""
+		
+	if act_submit == "1" then 
+		local enableReq = tostring(luci.http.formvalue("enable"))
+		local BootReq = "1"
+		local UsernameReq = tostring(luci.http.formvalue("Username"))
+		local PasswordReq = tostring(luci.http.formvalue("Password"))
+		local NicReq = s.global_wan_ifname()
+		local IPReq = tostring(luci.http.formvalue("IP"))
+		local MaskReq = tostring(luci.http.formvalue("Mask"))
+		local GatewayReq = tostring(luci.http.formvalue("Gateway"))
+		local DNSReq = "0.0.0.0"
+		local PingHostReq = "0.0.0.0"
+		local TimeoutReq = "8"
+		local EchoIntervalReq = "30"
+		local RestartWaitReq = "15"
+		local MaxFailReq = "8"
+		local StartModeReq = tostring(luci.http.formvalue("StartMode"))
+		local DhcpModeReq = tostring(luci.http.formvalue("DhcpMode"))
+		local dhcpscriptReq = tostring(luci.http.formvalue("dhcpscript"))
+		local DaemonModeReq = tostring(luci.http.formvalue("DaemonMode"))
+		if DaemonModeReq ~= "3" then 
+			DaemonModeReq = "2"
+		end
+		local ShowNotifyReq = "0"
+		local VersionReq = tostring(luci.http.formvalue("Version"))
+		--local dhcpscriptReq = "udhcpc -i"
+				
+		if enableReq ~= "1" then 
+			enableReq = ""
+		end 
+			
+		-- 返回值
+		local arr_out_put={}
+		
+		--插入运算代码
+		local datatypes = require "luci.cbi.datatypes"	
+
+		if not datatypes.ipaddr(IPReq) then
+			codeResp = 512
+		elseif not datatypes.ipaddr(GatewayReq) then 
+			codeResp = 520	
+		elseif not datatypes.ipaddr(DNSReq) then 
+			codeResp = 519
+		else 
+			local uci = require "luci.model.uci"
+			local option_name,mentohust_name
+			_uci_real = uci.cursor()
+			_uci_real:foreach("mentohust", "option",
+			function(s)
+				option_name = s[".name"]
+			end)
+			
+			_uci_real:foreach("mentohust", "mentohust",
+			function(s)
+				mentohust_name = s[".name"]
+			end)
+			
+			if option_name == nil then
+				option_name = _uci_real:add("mentohust", "option")
+			end 
+			
+			if mentohust_name == nil then
+				mentohust_name = _uci_real:add("mentohust", "mentohust")
+			end 
+	
+			_uci_real:set("mentohust",option_name,"enable",enableReq)
+			_uci_real:set("mentohust",option_name,"boot",BootReq)
+			_uci_real:set("mentohust",mentohust_name,"Username",UsernameReq)
+			_uci_real:set("mentohust",mentohust_name,"Password",PasswordReq)
+			_uci_real:set("mentohust",mentohust_name,"Nic",NicReq)
+			_uci_real:set("mentohust",mentohust_name,"IP",IPReq)
+			_uci_real:set("mentohust",mentohust_name,"Mask",MaskReq)
+			_uci_real:set("mentohust",mentohust_name,"Gateway",GatewayReq)
+			_uci_real:set("mentohust",mentohust_name,"DNS",DNSReq)
+			_uci_real:set("mentohust",mentohust_name,"PingHost",PingHostReq)
+			_uci_real:set("mentohust",mentohust_name,"Timeout",TimeoutReq)
+			_uci_real:set("mentohust",mentohust_name,"EchoInterval",EchoIntervalReq)
+			_uci_real:set("mentohust",mentohust_name,"RestartWait",RestartWaitReq)
+			_uci_real:set("mentohust",mentohust_name,"MaxFail",MaxFailReq)
+			_uci_real:set("mentohust",mentohust_name,"StartMode",StartModeReq)
+			_uci_real:set("mentohust",mentohust_name,"DhcpMode",DhcpModeReq)
+			_uci_real:set("mentohust",mentohust_name,"dhcpscript",dhcpscriptReq)
+			_uci_real:set("mentohust",mentohust_name,"DaemonMode",DaemonModeReq)
+			_uci_real:set("mentohust",mentohust_name,"ShowNotify",ShowNotifyReq)
+			_uci_real:set("mentohust",mentohust_name,"Version",VersionReq)
+			_uci_real:set("mentohust",mentohust_name,"dhcpscript",dhcpscriptReq)
+	
+			_uci_real:save("mentohust")
+			_uci_real:load("mentohust")
+			_uci_real:commit("mentohust")
+			_uci_real:load("mentohust")	
+		
+		end		
+		
+		-- 返回值及错误处理
+		if (codeResp == 0) then 
+		else 
+			msgResp = luci.util.get_api_error(codeResp)
+		end
+		
+		arr_out_put["code"] = codeResp
+		arr_out_put["msg"] = msgResp
+			
+		os.execute("/etc/init.d/mentohust restart")
+	end
+	
+	for i,v in ipairs(up_files) do
+		if nixio.fs.access(v['p']) then 
+			up_files[i]['access'] = 1
+			local status = nixio.fs.stat(v['p'])
+			up_files[i]['size'] = string.format("%6.2f", status.size/1024)
+		end
+	end
+	
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+<style type="text/css">
+.setup_box{
+height:600px;
+}
+</style>
+</head>
+<style type="text/css">
+	table.zone td.tor{
+		text-align: right;
+		width:120px;
+		line-height:14px;
+	}
+	.select_input {
+		margin-left: 120px;
+		height: 30px;
+		line-height: 30px;
+	}
+	.row p .txt {
+		margin-left: 120px;
+	}
+</style>
+
+<%
+if msgResp ~= "" and msgResp ~= nil then
+%>
+<script type="text/javascript">
+alert("<%=msgResp%>");
+</script>
+<%
+end
+%>
+<body>
+<div class="title">
+	<h2>本地插件<i>更多扩展功能</i></h2>
+</div>
+<div class="menu">
+	<a href="<%=luci.dispatcher.build_url("admin_web", "plugin","mentohust")%>" class="selected">锐捷认证</a>
+	<span class="pipe">|</span><a href="<%=luci.dispatcher.build_url("admin_web", "plugin","x3c")%>">华3认证</a>
+</div>
+<div class="box setup_box">
+	<form  id="form1" action="<%=luci.dispatcher.build_url("admin_web", "plugin","mentohust")%>"  enctype="multipart/form-data"   method="post"> 
+<!-- <form id="form1">   -->	
+	<ul class="ullist"  style="position:relative">
+		<li>
+			<div class="memu row">
+				<p>
+				<label>当前状态</label>
+				  &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp<%local data = luci.util.exec('/etc/init.d/mentohust status');luci.http.write(data)%>
+				</p>
+				<p><label>启用</label>
+				<input name="enable" type="checkbox" value="1" style="margin-left: 120px;" />
+				</p>
+				<p><label>用户名 </label><input type="text" name="Username" id="" class="txt" value=""/></p>
+				<p><label>密码</label><input type="text" name="Password" id="" class="txt" value=""/></p>
+				<p><label>IP</label><input type="text" name="IP" id="" class="txt" value=""/></p>
+				<p><label>子网掩码</label><input type="text" name="Mask" id="" class="txt" value=""/></p>
+				<p><label>网关</label><input type="text" name="Gateway" id="" class="txt" value=""/></p>
+				<input type="hidden" name="act_submit" id="" class="txt" value="1"/>
+				<p><label>组播地址</label>
+				<select name="StartMode" class="select_input">
+					<option value="0">0(标准)</option>
+					<option value="1">1(锐捷)</option>
+					<option value="2">2(赛尔)</option>
+				</select>
+				</p>
+				<p><label>DHCP 脚本</label><input type="text" name="dhcpscript" id="" class="txt" value=""/></p>
+				<p><label>DHCP方式</label>
+				<select name="DhcpMode" class="select_input">
+					<option value="0">0(不使用)</option>
+					<option value="1">1(二次认证)</option>
+					<option value="2">2(认证后)</option>
+					<option value="3">3(认证前)</option>
+				</select>
+				<p><label>客户端版本号</label><input type="text" name="Version" id="" class="txt" value=""/></p>
+				<p style="height: 150px; display:none;"><label>自定义数据文件</label>
+					<textarea name="DataFile" id="DataFile" cols="45" rows="10" style="margin-left: 120px;"></textarea>
+				</p>
+				<p><label>输出日志</label>
+				<input name="DaemonMode" type="checkbox" value="3" style="margin-left: 120px;" />
+				</p>
+				<p>
+				 <label>查看日志</label>
+				 &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp<a href="<%=luci.dispatcher.build_url("admin_web", "plugin","logs")%>?type=mentohust" target="_blank"> 查看日志 </a>
+				</p>
+				
+				<%if not nixio.fs.access("/tmp/data/mentohust") then%>
+				<p style="color:red">文件系统错误，可能不能上传文件  <a href="<%=luci.dispatcher.build_url("admin_web", "system","disk")%>" target="_blank">进入修复页面</a></p>
+				<%end%>
+				<%for i,v in ipairs(up_files) do%>
+					<p><label><%=v['n']%> </label>
+						<input name="datafile_<%=v['ns']%>" cols="45" rows="10" style="margin-left: 120px;" type="file">
+						<span id="del_<%=v['ns']%>_box"<%if v['access'] ~= 1 then%> style="display:none"<%end%>> <input type="button" id="del_datafile_<%=v['ns']%>" value="删除"> 文件大小: <%=v['size']%>KB</span>
+						<span id="del_none_<%=v['ns']%>_box"<%if v['access'] == 1 then%> style="display:none"<%end%>> 无文件 </span>
+						<img style="display:none;" id="loading_<%=v['ns']%>" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" />
+					</p>
+				<%end%>
+			</div>
+		</li>
+		<li>
+			<div class="btnbox">
+				<input type="button" value="提交" class="btn" id="submit_btn_2"/>
+				<img style="display:none;" id="loading2" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器" />
+			</div>
+		</li>
+	</ul>
+	</form>
+</div>
+<script type="text/javascript">
+$(function(){
+
+	//$.ajaxSettings.async = false;
+	//plugin/get_mentohust 
+	var request_date = {}; 
+	var request_date =  $("#form1").serializeArray(); 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "plugin","get_mentohust")%>",request_date,function(rsp) 
+	{
+		
+		$("#submit_btn").attr("disabled",false);
+		if(rsp.code == 0){
+			//auto fill--  
+			if (rsp.enable == "1"){
+				$("input[name='enable']").attr("checked","checked");
+			}
+			
+			if (rsp.DaemonMode == "3"){
+				$("input[name='DaemonMode']").attr("checked","checked");
+			}
+			
+			$("input[name='Boot']").val(rsp.Boot);  
+			$("input[name='Username']").val(rsp.Username);  
+			$("input[name='Nic']").val(rsp.Nic);  
+			$("input[name='IP']").val(rsp.IP);  
+			$("input[name='Mask']").val(rsp.Mask);  
+			$("input[name='Gateway']").val(rsp.Gateway);  
+			$("input[name='DNS']").val(rsp.DNS);  
+			$("input[name='PingHost']").val(rsp.PingHost);  
+			$("input[name='Timeout']").val(rsp.Timeout);  
+			$("input[name='EchoInterval']").val(rsp.EchoInterval);  
+			$("input[name='RestartWait']").val(rsp.RestartWait);  
+			$("input[name='MaxFail']").val(rsp.MaxFail);  
+			$("select[name='StartMode']").val(rsp.StartMode);
+			$("select[name='DhcpMode']").val(rsp.DhcpMode);
+			$("select[name='dhcpscript']").val(rsp.dhcpscript);
+			$("input[name='ShowNotify']").val(rsp.ShowNotify);  
+			$("input[name='Version']").val(rsp.Version);  
+			$("input[name='dhcpscript']").val(rsp.dhcpscript);  
+			$("input[name='Password']").val(rsp.Password);  
+			$("textarea[name='DataFile']").html(rsp.DataFile);
+			
+		}
+	})
+	
+	//提交
+	$("#submit_btn_2").click(function(){
+		var request_date =  $("#form1").serializeArray(); 
+		if ( false 
+			<%for i,v in ipairs(up_files) do%>
+				|| $("input[name='datafile_<%=v['ns']%>']").val()
+			<%end%>
+		) {
+			$.getJSON("<%=luci.dispatcher.build_url("api", "plugin","set_mentohust_upfile_tag")%>",request_date,function(rsp){
+				$("#form1").submit();
+			})
+		} else {
+			$("#form1").submit();
+		}
+	})
+	
+	<%for i,v in ipairs(up_files) do%>
+	$("#del_datafile_<%=v['ns']%>").click(function(){
+		$("#del_<%=v['ns']%>_box").hide();
+		$("#loading_<%=v['ns']%>").show();
+		request_date = {"file_short_name":"<%=v['ns']%>"}
+		$.getJSON("<%=luci.dispatcher.build_url("api", "plugin","del_mentohust_file")%>",request_date,function(rsp){
+			$("#del_none_<%=v['ns']%>_box").show();
+			$("#loading_<%=v['ns']%>").hide();
+		})
+	})
+	<%end%>
+	
+})
+	
+	function set_datafile_btn(){
+		$("#del_box").show();
+		$("#del_none_box").hide();
+	}
+	
+	function del_datafile_btn(){
+		$("#DataFile").html("");
+		$("#del_box").hide();
+		$("#del_none_box").show();
+	}
+</script>
+</body>
+</html>

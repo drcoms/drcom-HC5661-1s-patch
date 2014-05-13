@@ -1,0 +1,90 @@
+<%
+local ver  = require "luci.version"
+local nettype = luci.util.fliter_unsafe(luci.http.urlencode(luci.http.formvalue("nettype")))
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>极路由｜首次安装－请插入网线</title>
+<link rel="stylesheet" href="<%=resource%>/guide/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script src="<%=resource%>/guide/js/jquery-1.8.2.min.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/custom_checkbox_and_radio.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+	<div id="page">
+		<div id="header">
+			<h1><span id="logo">极路由｜首次安装</span></h1>
+		</div><!-- /header -->
+				
+		<div id="content">
+			<div id="insertdiv" class="insert">
+				<h2 id="notice_title">请插入网线</h2>
+				<p>将宽带网线插入极路由WAN接口</p>
+				<div class="map"></div>
+				<a id="btn_ok" href="javascript:void(0);" class="btn radius disabled">网线未连接</a>
+				<a id="btn_next" href="javascript:void(0);" class="link skip">跳过</a>
+			</div>
+		</div><!-- /content -->
+				
+		<div id="footer">
+		</div><!-- /footer -->
+	</div><!-- /page -->
+</body>
+<script type="text/javascript">
+var nettype = '<%=nettype%>';
+var is_internet_connect;
+var is_eth_link;
+
+refrash_eth_box();
+function refrash_eth_box(){
+    $.ajax({
+          url: "<%=luci.dispatcher.build_url("api", "system","check_network_connect")%>",
+          cache: false,
+          dataType: "json",
+          success: function(rsp){
+              if(rsp){
+                is_eth_link = rsp.isethlink;
+                is_internet_connect = rsp.isconn;
+                set_status_box(is_eth_link,is_internet_connect);
+                 if(!is_internet_connect){
+                      setTimeout("refrash_eth_box()",1000);
+                 }else{
+                      setTimeout("refrash_eth_box()",1500);
+                 }
+              }
+          },
+          error :function(){
+              setTimeout("refrash_eth_box()",2000);
+          }
+    });
+}
+
+set_status_box(is_eth_link, is_internet_connect);
+
+function set_status_box(link,conn){
+    if(!link){
+        $("#insertdiv").removeClass("yes");
+        $("#notice_title").html('请插入网线');
+        $("#btn_next").show();
+        $("#btn_next").click(function(){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "wisp")%>';
+        });
+        $("#btn_ok").html('网线未连接');
+        $("#btn_ok").addClass('disabled');
+        $("#btn_ok").click(function(){
+        });
+    } else {
+        $("#insertdiv").addClass("yes");
+        $("#notice_title").html('');
+        $("#btn_next").hide();
+        $("#btn_ok").html('已连接，下一步');
+        $("#btn_ok").removeClass('disabled');
+        $("#btn_ok").click(function(){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "internet_check")%>';
+        });
+    }
+}
+</script>
+</html>

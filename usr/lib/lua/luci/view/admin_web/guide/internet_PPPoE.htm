@@ -1,0 +1,313 @@
+<%
+local ver  = require "luci.version"
+local util  = require "luci.util"
+local http = require "luci.http"
+
+local autotype = util.fliter_unsafe(http.formvalue("autotype"))
+local findsuccess = http.formvalue("findsuccess")
+local from = http.formvalue("from")
+
+local msgResp_set
+
+local codeResp = 0
+local msgResp = "" 
+
+local typeReq
+local pppoe_statusResp
+local pppoe_nameReq
+local pppoe_passwdReq
+
+if findsuccess == "1" then
+    local pppoe_key = util.exec("cat /tmp/pppoe-sniffer/pppoe.key 2>/dev/null");
+    if pppoe_key ~= nil and pppoe_key ~= "" then
+        local pppoe_info = string.split(pppoe_key, "\n")
+        if pppoe_info[1] ~= nil then
+            pppoe_nameReq = pppoe_info[1]
+        end
+        if pppoe_info[2] ~= nil then
+            pppoe_passwdReq = pppoe_info[2]
+        end
+    end
+end
+
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>极路由｜首次安装－上网方式</title>
+<link rel="stylesheet" href="<%=resource%>/guide/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script src="<%=resource%>/guide/js/jquery-1.8.2.min.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/custom_checkbox_and_radio.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/jquery.dropkick-1.0.0.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/application.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+	<div id="page">
+		<div id="header">
+			<h1><span id="logo">极路由｜首次安装</span></h1>
+		</div><!-- /header -->
+				
+		<div id="content">
+			<form id="form" method="post">
+				<p id="type_info"></p>
+				<select value="上网方式" id="s1" class="drop radius" name="type">
+    				<option value="dhcp">自动(DHCP)</option>
+    				<option value="pppoe" selected="selected">宽带拨号</option>
+    				<option value="static">手动</option>
+    				<option value="wisp">无线中继</option>
+    				<option value="nonet">我不需要上网</option>
+			    </select>
+				<div class="line"></div>
+				<input id="pppoe_name_input" type="text" class="txt radius J_pppoe" maxLength="80" minLength="1" placeholder="宽带账号" name="pppoe_name" value="<%=pppoe_nameReq%>"/>
+				<input id="pppoe_passwd_input" type="text" class="txt radius J_pppoe" maxLength="80" minLength="1" placeholder="宽带密码" name="pppoe_passwd"  value="<%=pppoe_passwdReq%>" />
+				<a href="<%=luci.dispatcher.build_url("admin_web", "guide", "pppoe_find")%>?autotype=<%=autotype%>" class="btn radius" style="color: white; background-color: green; border: 0px;">马上找回宽带密码</a>
+				<p id="errormsg" class="error"></p>
+				<a id="submit" href="javascript:void(0);" class="btn radius">拨号上网</a>
+			</form>
+
+		</div><!-- /content -->
+				
+		<div id="footer">
+		</div><!-- /footer -->
+	</div><!-- /page -->
+</body>
+
+<script type="text/javascript">
+var autotype = '<%=autotype%>';
+var typeReq = '<%=typeReq%>';
+var pppoe_statusResp = '<%=pppoe_statusResp%>';
+var pppoe_nameReq = '<%=pppoe_nameReq%>';
+var pppoe_passwdReq = '<%=pppoe_passwdReq%>';
+var findsuccess = '<%=findsuccess%>';
+var working = false;
+var check = false;
+var last_ppp_msg='';
+var timeout = 36000;
+var sec;
+var from = '<%=from%>';
+
+var contact_html = '<a href="<%=luci.dispatcher.build_url("admin_web", "guide", "contact")%>?autotype=<%=autotype%>">联系宽带运营商</a>';
+var hiwifi_find_pppoe_html = '<a href="<%=luci.dispatcher.build_url("admin_web", "guide", "pppoe_find")%>?autotype=<%=autotype%>">使用极路由找回宽带密码</a>';
+
+var error_list = new Array;
+error_list['0'] = "正常";
+error_list['-1'] = "拨号超时，请稍后重试";
+error_list['646'] = "此时不允许该帐户登录，请"+contact_html;
+error_list['647'] = "您的账户已被禁止，请"+contact_html;
+error_list['648'] = "您的账户或密码已过期，请"+contact_html;
+error_list['649'] = "您的账户可能被限制，请"+contact_html;
+error_list['678'] = "运营商服务器未响应，请重试";
+error_list['691'] = "帐号密码错误或欠费。忘记密码，推荐"+hiwifi_find_pppoe_html+"，或"+contact_html;
+error_list['709'] = "更改域上的密码时发生错误。密码可能太短或者可能与以前使用的密码匹配。";
+
+function update_type_info(autotype){
+   var autotype_name = '';
+   if(autotype == 'dhcp'){
+    autotype_name = '自动(DHCP)';
+   }else if(autotype == 'pppoe'){
+   autotype_name = '宽带拨号';
+   }else if(autotype == 'static'){
+   autotype_name = '手动';
+   }else if(autotype == 'wisp'){
+   autotype_name = '无线中继';
+   }
+   if(autotype_name==''){
+    $("#type_info").html('');
+   }else{
+    $("#type_info").html('<h2 style="font-size: 1.3em;">检测出<font style="font-weight: bold; color: green;">'+autotype_name+'</font>上网</h2>');
+   }
+   if(from == 'static'){
+     $("#type_info").html('请确认<font style="font-weight: bold; color: red;">网线另一端</font>是否提<br/>供上网服务&nbsp;&nbsp;'+
+        '<a href="<%=luci.dispatcher.build_url("admin_web", "guide", "internet_check")%>">重新检测</a>');
+   }
+}
+
+$(window).load(function() {
+    $('.J_pppoe').blur(function(){
+        $(this).lengthCheck({'blurCheck':true,'errorClass':'input-error'});
+    })
+    
+    if(findsuccess == 1 || findsuccess == "1"){
+        form_submit();
+    }
+    update_type_info(autotype);
+    $("#s1").change(function(){
+        var type = $("#s1").val();
+        if(type == "dhcp"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "dhcp")%>?autotype='+autotype;
+        }else if(type == "pppoe"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "pppoe")%>?autotype='+autotype;
+        }else if(type == "static"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "static")%>?autotype='+autotype;
+        }else if(type == "wisp"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "wisp")%>?autotype='+autotype;
+        }else if(type == "nonet"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "internet_success")%>'+'?type=nonet&autotype='+autotype;
+        }
+    });
+    
+    listerenterkeydown(function(){
+        form_submit();
+    });
+    
+    $("#submit").click(function(){
+       form_submit();
+    });
+});
+
+function listerenterkeydown(down){
+    document.onkeydown = function(e){     
+        var ev = document.all ? window.event : e;    
+        if(ev.keyCode==13) {  
+            down();
+        }
+    }
+}
+
+function form_submit(){
+    $('.J_pppoe').lengthCheck({'blurCheck':true,'errorClass':'input-error'});
+    if($(".input-error").size() > 0){
+        return;
+    }
+    if(working == true){
+        return;
+    }
+    working = true;
+    check = true;
+    last_ppp_msg = '';
+    $("#errormsg").html('');
+    $("#submit").html('正在拨号中...');
+    sec = Math.ceil(timeout/1000);
+    update_btn();
+    var request_date =  $("#form").serializeArray(); 
+    $.post("<%=luci.dispatcher.build_url("api", "network","set_wan_connect")%>",request_date,function(rsp) 
+    {
+        if(rsp.code == 0){
+           setTimeout("update_ppp_status_view()", 5000);
+           setTimeout("stop_check()", timeout);
+        } else {
+           $("#errormsg").html(rsp.msg);
+           $("#submit").html('拨号上网');
+           working = false;
+        }
+    })
+    .error(function() {
+        $(".error").html('设置失败');
+        $("#submit").html('拨号上网');
+        working = false;
+    });
+}
+
+function update_btn(){
+    if(working == true){
+        if(sec > 0){
+            var mod = sec % 3;
+            if(mod == 0){
+                $("#submit").html("正在拨号中...");
+            }else if(mod == 1){
+                $("#submit").html("正在拨号中..");
+            }else if(mod == 2){
+                $("#submit").html("正在拨号中.");
+            }else{
+                $("#submit").html("正在拨号中...");
+            }
+            setTimeout("update_btn()", 1000);
+            sec = sec - 1;
+        }else{
+            $("#submit").html("拨号上网");
+        }
+    }else{
+        $("#submit").html("拨号上网");
+    }
+}
+
+function stop_check(){
+    check = false;
+}
+
+function get_ppp_errorcode_by_msg(msg){
+    var code = 0
+    var str = msg;
+
+    var ch = new Array;
+    var chu =  new Array;
+    ch = str.split(" ");
+
+    if (ch.length > 0){
+        chu = ch[0].split("E=");
+        if (chu.length>0){
+            code = chu[1];
+        }
+    }
+    return code
+}
+
+function get_ppp_error_msg(code){
+    if (error_list[code]){
+        return error_list[code];
+    }
+    return;
+}
+
+function update_ppp_status_view(){
+    if(check != true){
+        $("#submit").html('拨号上网');
+        $("#errormsg").html(last_ppp_msg);
+        working = false;
+        return;
+    }
+    //network/get_pppoe_status 
+    $.ajax({
+          url: "<%=luci.dispatcher.build_url("api", "network","get_pppoe_status")%>",
+          cache: false,
+          dataType: "json",
+          success: function(rsp){
+                var has_check_pppoe_status = false;
+                var ppp_msg = "";
+                var success = false;
+                if(rsp.code == 0){
+                    var special_msg = "";
+                    var special_num;
+                    special_num = parseInt(rsp.special_dial_num)+1;
+                    if (rsp.special_dial == "1"){
+                        special_msg = "正在尝试拨号 "+special_num+"/8 ";
+                    }
+                    
+                    if (rsp.status_code == -1){
+                        ppp_msg = get_ppp_error_msg(rsp.status_code);
+                        if(get_ppp_errorcode_by_msg(rsp.remote_message)){
+                             ppp_msg = get_ppp_error_msg(get_ppp_errorcode_by_msg(rsp.remote_message));
+                        };
+                    } else if (rsp.status_code == 0) {
+                       success = true;
+                    } else {
+                        if(rsp.status_code == 9999){
+                            ppp_msg = "WAN 未连接网线或宽带拨号断开，请检查WAN口网线和宽带帐号密码是否有效。";
+                        } else {
+                           // var error_msg = "错误  "+rsp.status_code+" "+rsp.status_msg ;
+                            ppp_msg = get_ppp_error_msg(get_ppp_errorcode_by_msg(rsp.remote_message));
+                        }
+                        
+                        if (rsp.remote_message){
+                            ppp_msg = get_ppp_error_msg(get_ppp_errorcode_by_msg(rsp.remote_message));
+                        }
+                    }
+                }
+                
+                if(!success){
+                  last_ppp_msg = ppp_msg;
+                  setTimeout("update_ppp_status_view()", 2000);
+                }else{
+                   window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide","internet_success")%>';
+                }
+        },error :function(rsp){
+           $("#errormsg").html('获取拨号状态失败');
+           setTimeout("update_ppp_status_view()", 3000);
+        }
+    });
+}
+
+</script>
+</html>

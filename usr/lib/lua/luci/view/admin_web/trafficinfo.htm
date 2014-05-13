@@ -1,0 +1,276 @@
+<%
+--[[
+	Info	重启/恢复出厂设置
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local ver  = require "luci.version"
+local uci = require "luci.model.uci"
+
+
+local wanon = uci.inst_state:get("network", "wan", "up") == "1"
+local wanif = wanon and uci.inst_state:get("network", "wan", "ifname")
+local wanproto = uci.inst_state:get("network", "wan", "proto")
+local lanif = uci.inst_state:get("network", "lan", "ifname")
+local wifi_status,wifi_device,wlanif = luci.util.get_wifi_device_status()
+if wifi_status=="0" then
+wlanif = ""
+end 
+local vpnif  = luci.util.get_vpn_dev()
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+
+<!-- 流量：start -->
+<style>
+body {
+padding: 0;
+margin: 0 0;
+font: 12px sans-serif;
+}
+
+table {
+empty-cells: show;
+padding: 0;
+margin: 0 0;
+}
+td {
+font: 12px sans-serif;
+}
+   
+#container {
+background: #fff;
+border-spacing: 0;
+width: 100%;
+margin: 0px;
+}
+
+#content {
+padding: 5px 4px 20px 4px;
+vertical-align: top;
+width: 760px;
+}
+#ident {
+color: #aaa;
+text-align: left;
+padding-right: 5px;
+font-size: 11px;
+}
+ 
+#refresh-spinner {
+visibility: hidden;
+vertical-align: middle;
+}
+
+ul.tabs,
+#tabs {
+padding: 0;
+margin: 0;
+}
+ul.tabs li,
+#tabs li {
+display: inline;
+list-style: none;
+}
+ul.tabs a,
+#tabs a {
+width: 90px;
+display: block;
+float: left;
+padding: 3px 0;
+margin: 0 3px 0 0;
+text-align: center;
+text-decoration: none;
+color: #888;
+height: 15px;
+background: #f3f3f3;
+}
+ul.tabs a.active,
+#tabs a.active {
+background: #36AAD6;
+color: #fff;
+font-weight: bold;
+}
+ul.tabs a:hover,
+#tabs a:hover {
+background: #5fb8dc;
+color: #fff;
+font-weight: bold;
+}
+
+#txt {
+width: 550px;
+white-space: nowrap;
+}
+#bwm-controls {
+text-align: right;
+margin-right: 5px;
+margin-top: 5px;
+float: right;
+visibility: hidden;
+width:180px;
+}
+</style>
+<script type='text/javascript' src='<%=resource%>/traffic.js?v=<%=ver.svnRevNum%>'></script>
+<script type='text/javascript'>
+function testSVG(){
+    var ns = {'svg': 'http://www.w3.org/2000/svg'};
+    return !!document.createElementNS && !!document.createElementNS(ns.svg, 'svg').createSVGRect;
+}
+nvram = {
+	wan_ifname: 'vlan1',
+	wan2_ifname: 'vlan2',
+	lan_ifname: '<%=lanif%>',
+	wl_ifname: '<%=wlanif%>',
+	tun_ifname:'<%=vpnif%>',
+	wan_proto: '<%=wanproto%>',
+	web_svg: testSVG()?'1':'0',
+	rstats_colors: '',
+	wan_iface: '<%=wanif%>',
+	wan2_iface: 'ppp1',
+	wan3_iface: '',
+	wan4_iface: '',
+	web_mx: 'status,bwm',
+	web_pb: ''};
+
+var cprefix = 'bw_r';
+var updateInt = 2;
+var updateDiv = updateInt;
+var updateMaxL = 300;
+var updateReTotal = 1;
+var prev = [];
+var debugTime = 0;
+var avgMode = 0;
+var wdog = null;
+var wdogWarn = null;
+var ref = new TomatoRefresh('<%=luci.dispatcher.build_url("admin_web","traffic","update")%>?lanif=<%=lanif%>&wlanif=<%=wlanif%>&wanif=<%=wanif%>&vpnif=<%=vpnif%>', 'exec=netdev', 2);
+ref.stop = function() {
+	this.timer.start(1000);
+}
+ref.refresh = function(text) {
+	var c, i, h, n, j, k;
+	watchdogReset();
+	++updating;
+	try {
+		netdev = null;
+		eval(text);
+		n = (new Date()).getTime();
+		if (this.timeExpect) {
+			if (debugTime) E('dtime').innerHTML = (this.timeExpect - n) + ' ' + ((this.timeExpect + 2000) - n);
+			this.timeExpect += 2000;
+			this.refreshTime = MAX(this.timeExpect - n, 500);
+		}else {
+			this.timeExpect = n + 2000;
+		}	
+		for (i in netdev) {
+			c = netdev[i];
+			if ((p = prev[i]) != null) {
+				h = speed_history[i];
+				h.rx.splice(0, 1);
+				h.rx.push((c.rx < p.rx) ? (c.rx + (0xFFFFFFFF - p.rx)) : (c.rx - p.rx));
+				h.tx.splice(0, 1);
+				h.tx.push((c.tx < p.tx) ? (c.tx + (0xFFFFFFFF - p.tx)) : (c.tx - p.tx));
+			} else if (!speed_history[i]) {
+				speed_history[i] = {};
+				h = speed_history[i];
+				h.rx = [];
+				h.tx = [];
+				for (j = 300; j > 0; --j) {
+					h.rx.push(0);
+					h.tx.push(0);
+				}	
+				h.count = 0;
+			}
+			prev[i] = c;
+		}
+		loadData();
+	}catch (ex) {
+	}
+	--updating;
+}
+
+function watchdog(){
+	watchdogReset();
+	ref.stop();
+	wdogWarn.style.display = '';
+}
+function watchdogReset(){
+	if (wdog) clearTimeout(wdog)
+	wdog = setTimeout(watchdog, 10000);
+	wdogWarn.style.display = 'none';
+}
+function init(){
+	speed_history = [];
+	initCommon(2, 1, 1);
+	wdogWarn = E('warnwd');
+	watchdogReset();
+	ref.start();
+}
+</script>
+<!-- 流量：end-->
+
+</head>
+<body onload='init()'>
+ <div class="title">
+	<h2>实时流量</h2>
+</div>
+		<!-- 流量table : start-->
+		<table id='container' cellspacing='0' >
+			<tr>
+				<td id='content'>
+				<div id='rstats'>
+					<div id='tab-area'></div>
+					<script type='text/javascript'>
+					if (nvram.web_svg != '0') {
+						// without a div, Opera 9 moves svgdoc several pixels outside of <embed> (?)
+						W("<div style='border-top:1px solid #f0f0f0;border-bottom:1px solid #f0f0f0;visibility:hidden;padding:0;margin:0' id='graph'><embed src='/turbo-static/turbo/traffic.svg?1.29' style='width:760px;height:300px;margin:0;padding:0' type='image/svg+xml' pluginspage='http://www.adobe.com/svg/viewer/install/'></embed></div>");
+					}
+					</script>
+				</div>
+				<div>
+					<div id='bwm-controls'>
+						<small>(10分钟流量,每2秒刷新)</small><br>
+						<span id='warnwd' style='display:none'>连接失败...&nbsp;</span>
+						<span id='dtime'></span>
+						<img src='<%=resource%>/web/js/artDialog/skins/icons/loading.gif' id='refresh-spinner' onclick='javascript:debugTime=1'>
+						
+						<span style="display: none;" id='drawcolor'></span>
+						<span style="display: none;" id='drawrev'></span>
+					</div>
+					<table border=0 cellspacing=2 id='txt'>
+						<tr>
+							<td width='8%' align='right' valign='top'><b style='border-bottom:blue 1px solid' id='rx-name'>下载</b></td>
+							<td width='15%' align='right' valign='top'><span id='rx-current'></span></td>
+							<td width='8%' align='right' valign='top' style='display: none'><b>平均</b></td>
+							<td width='15%' align='right' valign='top' id='rx-avg' style='display: none'></td>
+							<td width='8%' align='right' valign='top'><b>最大</b></td>
+							<td width='15%' align='right' valign='top' id='rx-max'></td>
+							<td width='8%' align='right' valign='top' style='display: none'><b>合计</b></td>
+							<td width='14%' align='right' valign='top' id='rx-total' style='display: none'></td>
+							<td>&nbsp;</td>
+						</tr>
+						<tr>
+							<td width='8%' align='right' valign='top'><b style='border-bottom:blue 1px solid' id='tx-name'>上传</b></td>
+							<td width='15%' align='right' valign='top'><span id='tx-current'></span></td>
+							<td width='8%' align='right' valign='top' style='display: none'><b>平均</b></td>
+							<td width='15%' align='right' valign='top' id='tx-avg' style='display: none'></td>
+							<td width='8%' align='right' valign='top'><b>最大</b></td>
+							<td width='15%' align='right' valign='top' id='tx-max'></td>
+							<td width='8%' align='right' valign='top' style='display: none'><b>合计</b></td>
+							<td width='14%' align='right' valign='top' id='tx-total' style='display: none'></td>
+							<td>&nbsp;</td>
+						</tr>
+					</table>
+				</div>
+				</td>
+			</tr>
+		</table>
+		<!-- 流量table : end -->
+</body>
+</html>

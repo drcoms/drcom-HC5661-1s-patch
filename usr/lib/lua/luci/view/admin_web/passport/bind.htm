@@ -1,0 +1,208 @@
+<%
+--[[
+	Info	用户中心
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local path  = luci.dispatcher.context.requestpath
+local action = path[#path]
+local code_bk = luci.http.formvalue("code")
+
+local guide_mode = luci.http.formvalue("guide_mode")
+
+local protocol = require "luci.http.protocol"
+local http_host = luci.http.getenv("HTTP_HOST")
+local callback_url = "http://"..http_host..luci.dispatcher.build_url("admin_web", "passport","bind","callback").."/?tmp"
+--local callback_url =  "http://"..http_host.."/cgi-bin/turbo/admin_web/passport/bind/callback/?tmp";
+local callback_url_encode = protocol.urlencode(callback_url)
+local mac_nospace = string.upper(string.gsub(luci.util.get_mac(),":",""));
+local ver  = require "luci.version"
+
+-%>	
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+
+<script type="text/javascript">
+<!--
+
+//$.ajaxSettings.async = false;
+
+var action = "<%=action%>";
+var code = "<%=code_bk%>";
+$(function(){
+	$(".info_box").hide();
+
+	if (action == "callback"){
+		
+		$('#info_undbind').show();
+		$('.btn').hide();
+		//5.02 请求永久 token 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "passport","bind_token")%>",{"code":code},function(rsp) 
+		{
+			
+			if (rsp.code == 0){
+				$('#status_1').html(rsp.username+" 绑定成功");
+				window.parent.getPassport();
+			} else {
+				alert(rsp.msg);
+			}
+			window.location.href= '<%=luci.dispatcher.build_url("admin_web", "passport","bind")%>';
+		})
+		
+	} else {
+		//5.04 获取用户信息 - (是否棒形)
+		$.getJSON("<%=luci.dispatcher.build_url("api", "passport","user")%>",{},function(rsp) 
+
+		{
+			
+			if(rsp.code == 0){
+				$('#info_binded').show();
+				$('.btn').hide();
+				$('#unbind').hide();
+				$('#status_2').html("已绑定");
+				$('#username').html(rsp.username);
+				$('#openid').html(rsp.OpenID);
+				
+				$('#unbind').show();
+				$('#goto_passport').show();
+				$('#guide_btn2').show();
+
+			} else {
+				$('#info_undbind').show();
+				$('.btn').hide();
+				$('#bind_now').show();
+				$('#guide_btn1').show();
+				
+				$('#status_1').html("未绑定 ");
+				$('.bind_msg').html("(绑定后即可打开\"加速\"等云功能)");
+				
+			}
+		})
+		
+		
+	}
+	
+	
+	
+})
+//-->
+</script>
+<style type="text/css">
+	td div{
+		line-height:22px;
+	}
+</style>
+<div class="title">
+	<h2>云服务<i>绑定路由器 设置云功能</i></h2>
+</div>
+<div class="box info">
+	<div class="info_box" id="info_undbind">
+		<p><b>状态:</b><span id="status_1">绑定中</span></p>
+		<p class="bind_btn">
+			<input type="button" value="<%:现在绑定%>" class="btn" id="bind_now">
+			<%
+			if (guide_mode == "1") then
+			%>
+				<input type="button" value="设置下一项" class="btn" id="guide_btn1" onclick="guide_mode_next_step();"/>
+			<%
+			end 
+			%>
+		</p>
+		<span class="bind_msg"></span>
+	</div>
+	<div class="info_box" id="info_binded">
+		
+		<p><b>状态:</b><span id="status_2">绑定中</span> - <a href="#" id="unbind"> <%:解除绑定%> </a></p>
+		<p><b>openid:</b><span id="openid"></span></p>
+		<p><b><%:用户名%>:</b><span id="username"></span></p>
+		<p id="assoclist" class="bind_btn">
+		<input type="button" value="设置云功能" class="btn" id="goto_passport">
+		<%
+		if (guide_mode == "1") then
+		%>
+			<input type="button" value="设置下一项" class="btn" id="guide_btn2" onclick="guide_mode_next_step();"/>
+		<%
+		end 
+		%>
+		</p>
+		<span class="bind_msg"></span>
+		<p class="tips">- 未连接互联网请检查 <a href="javascript:void();" onclick="window.parent.open_windows('set_network');">网络设置</a></p>
+		<p class="tips">- 提示2</p>
+	</div>
+</div>
+
+<script type="text/javascript">
+<!--
+
+var st_url = "http://app.hiwifi.tw";
+
+
+//5.01 临时Token请求接口 
+$("#goto_passport").click(function(){
+	
+	//TODO: 
+	//1. 携带登录信息 (token)
+	//3. 整页跳转
+	var mac= "<%=mac_nospace%>";
+	var router_url = st_url+'/index.php?m=router&a=info&mac='+mac;
+	
+	window.open(router_url);
+})
+
+$("#bind_now").click(function(){
+	$(".bind_msg").html("操作中...")
+
+	$.getJSON("<%=luci.dispatcher.build_url("api", "passport","bind_request")%>",{},function(rsp) 
+	{ 
+		if(rsp.code == 0){
+			$(".bind_msg").html("令牌申请成功");
+			return_rul = "<%=callback_url_encode%>";
+			window.location.href= st_url+'/oauth/authorize?token='+rsp.requesttoken+'&returl='+return_rul;
+		} else {
+			$(".bind_msg").html("<span style='color:red'>"+rsp.msg+"</span>");
+		}
+		
+	})
+})
+
+//5.04 解除绑定接口
+$("#unbind").click(function(){
+	$(".bind_msg").html("操作中...")
+	//5.03 解除绑定 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "passport","bind_unbind")%>",{},function(rsp) 
+	{ 
+		if(rsp.code == 0){
+			$(".bind_msg").html("解除绑定成功");
+			window.parent.getPassport();
+			return_rul = "<%=callback_url_encode%>";
+			//todo: 此处需要增加刷新父级页面的功能。做法2种: 1.js 控制样式 2. 直接刷新
+		} else {
+			$(".bind_msg").html("<span style='color:red'>"+rsp.msg+"</span>");
+		}
+		window.location.href= '<%=luci.dispatcher.build_url("admin_web", "passport","bind")%>';
+	})
+})
+
+
+//引导模式下一步
+function guide_mode_next_step(){
+	window.parent.guide_step_done();
+	window.parent.art.dialog.list['func_box'].close();
+}
+
+//-->
+</script>
+</body>
+</html>

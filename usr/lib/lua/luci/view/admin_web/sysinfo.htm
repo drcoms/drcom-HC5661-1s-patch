@@ -1,0 +1,375 @@
+<%
+--[[
+	Info	系统状态
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local board_type = luci.util.get_sys_board()
+local tw = require "tw"
+local status = require "luci.tools.status"
+
+--网关
+local defaulgateway = luci.util.get_eth1_gateway()
+if defaulgateway=="" or defaulgateway == nil then defaulgateway = "无" end
+local ver  = require "luci.version"
+
+local wan_ip = tw.get_wan_ip()
+if wan_ip == nil then wan_ip = "" end
+
+	local nxo = require "nixio"
+	local x = nxo.getifaddrs()
+	local ipv6_addr,ipv6_netmask
+	local vpn_name,vpn_addr,vpn_netmask
+	
+	for i,user in ipairs(x) do
+		if user['family'] == "inet6" and string.sub(user['addr'],1,4) ~= "fe80" and user["name"] == "sit1" and user["flags"]["up"] == true then 
+			ipv6_addr = user['addr']
+			ipv6_netmask = user['netmask']
+		end
+		
+		if user['family'] == "inet" and (user["name"] == "pptp-vpn" or  user["name"] == "l2tp-vpn") and user["flags"]["up"] == true then 
+			vpn_name = user["name"]
+			vpn_addr = user['addr']
+			vpn_netmask = user['netmask']
+		end
+	end	
+%>
+
+<!DOCTYPE html>
+<html>
+<head> 
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/web/js/util.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript">//<![CDATA[
+	var i18_connection = "<%:连接中...%>";
+	var i18_second = "<%:秒%>";
+	var i18_hour = "<%:小时%>";
+	var i18_minute = "<%:分钟%>";
+	var i18_day = "<%:天%>";
+	var uptime = <%=luci.util.get_uptime()%>;
+  //]]></script>   
+</head>
+<body>
+<div class="title">
+	<h2>系统状态</h2>
+</div>
+<div class="sheet">
+<!--
+	<ul class="unit">
+		<li>
+		<p id="sys_hard"><b>系统版本</b><%=board_type%> - <% luci.http.write(tw.get_version():match("^([^%s]+)")) %><a href="javascript:void()" id="check_upgrade"></a>
+		<span id="need_upgrade" style="display:none;background:url(<%=resource%>/web/images/alert.png) no-repeat 5px center;text-align: left;padding: 5px 5px 5px 33px;">有更新,<a href="#" onclick="window.parent.open_windows('upgrade');">现在升级</a></span>
+		</p></li>
+		<li><p><b>开机时长</b><span id="lan_time">获取中...</span></p></li>
+	</ul>
+	-->	
+
+	<ul class="unit network_false">
+		<li><h3>互联网</h3></li>
+		<li><p style='width:430px'><b>IPv4地址</b><span id="wan_ip">
+		<%if wan_ip=="" then luci.http.write("未分配") else luci.http.write(wan_ip) end%>
+		</span> / <span id="wan_mask">无</span>
+		<span id="wan_type" ></span><a href="javascript:void();" onclick="window.parent.open_windows('set_network');">修改</a></p></li>
+		<li id="wan_ipv6_li" style="display: none"><p><b>IPv6地址</b><span id="wan_ipv6">获取中...</span></p></li>
+		<li><p><b>MAC地址</b><span id="wan_mac">获取中...</span></p></li>
+		<li><p><b>DNS地址</b><span id="wan_dns">
+		<%
+		--DNS
+		local cnt = 1
+		local show_slash
+		
+		if status then
+			if table.getn(status:dns_resolv()) > 0 then
+				for i,user in ipairs(status:dns_resolv()) do
+					show_slash = ""
+					local datatypes = require "luci.cbi.datatypes"	
+					if datatypes.ipaddr(user) then
+						if cnt ~= 1 then show_slash = " / " end
+						%>
+						 <%=show_slash%><%=user%>
+						<%
+						cnt = cnt+1
+					end 
+				end
+			else 
+				luci.http.write("无")
+			end
+		end
+		%>
+		</span></p></li>
+		<li><p><b>网关地址</b><span ><%=defaulgateway%>&nbsp</span></p></li>
+	</ul>
+	
+	<%if ipv6_addr then%>
+		<ul class="unit">
+			<li><h3>IPv6 隧道</h3></li>
+			<li><p><b>IPv6地址</b><span id="vpn_ipv6">获取中</span></p></li>
+		</ul>
+		<script type="text/javascript">
+			var ipv6_netmask = "<%=ipv6_netmask%>";
+			var ipv6_addr = "<%=ipv6_addr%>";
+			if (ipv6_addr != ""){
+				ipv6_netmask = ipv6_hex2mask(ipv6_netmask);
+				$("#vpn_ipv6").html(ipv6_addr+" / "+ipv6_netmask);
+			}
+			
+			//vpn
+			var vpn_name = "<%=vpn_name%>";
+			var vpn_netmask = "<%=vpn_netmask%>";
+			var vpn_addr = "<%=vpn_addr%>";
+			
+		</script>
+	<%end%>
+
+	<%if vpn_name then%>
+		<ul class="unit">
+			<li><h3><%=vpn_name%></h3></li>
+			<li><p><b>IPv4地址</b><span><%=vpn_addr%> / <%=vpn_netmask%></span></p></li>
+		</ul>
+	<%end%>
+	
+	<ul class="unit">
+		<li><h3>局域网</h3></li>
+		<li><p><b>IPv4地址</b><span id="lan_ipv4">获取中...</span><a href="javascript:void();" onclick="window.parent.open_windows('options');">修改</a></p></li>
+		<li><p><b>IPv6地址</b><span id="lan_ipv6">获取中...</span></p></li>
+		<li><p><b>MAC地址</b><span id="lan_mac">获取中...</span></p></li>
+	</ul>
+	
+	<ul class="unit">
+		<li><h3>无线网络</h3></li>
+		<li><p><b>无线状态</b><span id="wifi_status">获取中...</span><a href="javascript:void();" onclick="window.parent.open_windows('set_wifi');">修改</a></p></li>
+		<li><p><b>网络名称</b><span id="wifi_ssid">获取中...</span></p></li>
+		<li><p><b>安全类型</b><span id="wifi_encryption">获取中...</span></p></li>
+		<li><p><b>无线信道</b><span id="wifi_channel">获取中...</span></p></li>
+	</ul>
+</div>
+<script type="text/javascript">
+
+$(function(){
+	$("#lan_time").html(millisecondToDate(uptime));
+	
+	//$.ajaxSettings.async = false;
+	get_upgrade_info();
+	
+	//network/get_wan_info
+	get_wan_info();
+		
+	//network/get_lan_info
+	get_lan_info();
+	 
+		
+	//wifi/view_detail 
+	//取最后一个
+	get_wifi_info();
+	
+	function get_wifi_info(){
+		if(top.global_wifi_status){//走缓存
+			$("#wifi_ssid").html(UrlDecode(top.global_wifi_ssid_show));
+			if(top.global_wifi_encryption == "none"){
+				$("#wifi_encryption").html("无加密");
+			}else if(top.global_wifi_encryption == "mixed-psk+aes" || top.global_wifi_encryption == "mixed-psk"){
+				$("#wifi_encryption").html("强加密(WPA/WPA2个人版)");
+			}
+			if((top.global_wifi_channel=='0' || top.global_wifi_channel=='') && top.global_wifi_device){
+				var request_date = {"device":top.global_wifi_device};
+				
+				$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_channel")%>",request_date,function(rsp) 
+				{ 
+					if (rsp.channel){
+						if(rsp.channel == "" || rsp.channel == "0"){
+							$("#wifi_channel").html(rsp.channel_autoreal+"（自动选择）");
+						} else {
+							$("#wifi_channel").html(rsp.channel+"（手动选择）");
+						}
+					}
+				});
+				
+			}else{
+				$("#wifi_channel").html(top.global_wifi_channel+"（手动选择）");
+			}
+			if(top.global_wifi_status=='1'){
+				$("#wifi_status").html("工作中");
+			}else{
+				$("#wifi_status").html("<span style='color:red'>已关闭</span>");
+			}
+			return;
+		}
+		
+		var request_date = {};		
+		$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_status_list")%>",request_date,function(rsp) 
+		{
+			if(rsp.code == 0){
+				//取最后一个
+				var dev_index = rsp.device_status.length-1;
+				var last_dev = rsp.device_status[dev_index].device;
+
+				var request_date = {"device":last_dev}; 
+				$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","view_detail")%>",request_date,function(rsp) 
+				{ 
+					if(rsp.code == 0){
+						$("#wifi_ssid").html(rsp.ssid);
+						if(rsp.status == 1){
+							$("#wifi_status").html("工作中");
+						} else {
+							$("#wifi_status").html("<span style='color:red'>已关闭</span>");
+						}
+						
+						if(rsp.encryption == "none"){$("#wifi_encryption").html("无加密");}
+						if(rsp.encryption == "mixed-psk+aes" || rsp.encryption == "mixed-psk"){$("#wifi_encryption").html("强加密(WPA/WPA2个人版)");}
+						
+					}
+				})
+				
+				//wifi/get_channel 
+				var request_date = {"device":last_dev}; 
+				$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_channel")%>",request_date,function(rsp) 
+				{ 
+					if (rsp.channel){
+						if(rsp.channel == "" || rsp.channel == "0"){
+							$("#wifi_channel").html(rsp.channel_autoreal+"（自动选择）");
+						} else {
+							$("#wifi_channel").html(rsp.channel+"（手动选择）");
+						}
+					}
+				})
+				
+			} else {
+				
+			}
+		});
+	}
+	
+	
+	function get_upgrade_info(){
+		//system/upgrade_check 
+		if(top.global_upgrade_info){
+			update_upgrade_info(top.global_upgrade_info);
+		}else{
+			var request_date = {}; 
+			$.getJSON("<%=luci.dispatcher.build_url("api", "system","upgrade_check")%>",request_date,function(rsp) 
+			{ 
+				update_upgrade_info(rsp);
+			});
+		}
+	}
+	function update_upgrade_info(rsp){
+		if (rsp.need_upgrade == 1){
+			$("#need_upgrade").show().attr('title',rsp.version);
+		}
+	}
+	
+	function get_wan_info(){
+		if(top.global_wan_ipv4 && top.global_wan_ipv4!='' && top.global_wan_ipv4=='<%=wan_ip%>'){
+			update_wan_info(top.global_wan_type,top.global_wan_ipv4,top.global_wan_ipv4_mask,
+					top.global_wan_ipv6,top.global_wan_ipv6_mask,top.global_wan_mac)
+			return;
+		}
+		var request_date = {}; 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "network","get_wan_info")%>",request_date,function(rsp){
+			if(rsp.code==0){
+				var net_type 
+				var ipv4 = '';
+				var ipv4_mask = '';
+				var ipv6 = '';
+				var ipv6_mask = '0';
+				var mac = '无';
+				if(rsp.ipv4[0]){
+					ipv4_ip = rsp.ipv4[0].ip;
+					ipv4_mask = rsp.ipv4[0].mask;	
+				}
+				if(rsp.ipv6){
+					for (var i=0;i<rsp.ipv6.length;i++){
+						if(rsp.ipv6[i].type == 'Global'){
+							ipv6_ip = rsp.ipv6[i].ip;
+							ipv6_mask = rsp.ipv6[i].mask;
+						}
+					}
+				}
+				
+				var net_type_tmp = rsp.type.toUpperCase();
+				if (rsp.macaddr && rsp.macaddr != ""){mac = (rsp.macaddr.toUpperCase());}else if(rsp.mac && rsp.mac!=''){mac = (rsp.mac.toUpperCase());}
+				
+				$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_bridge")%>",{},function(rsp) 
+				{ 
+					if(rsp.status == 1){
+						net_type = "无线中继 DHCP";
+					} else {
+						net_type = net_type_tmp
+					}
+					
+					
+					update_wan_info(net_type,ipv4,ipv4_mask,ipv6,ipv6_mask,mac)	
+				})				
+			}
+		});
+	}
+	function update_wan_info(net_type,ipv4,ipv4_mask,ipv6,ipv6_mask,mac){
+		$("#wan_type").html("("+net_type+")");
+		$("#wan_mask").html(ipv4_mask);
+		$("#wan_mac").html(mac);
+		if(ipv6=='' || ipv6_mask=='0'){
+			$("#wan_ipv6_li").hide();
+		}else{
+			$("#wan_ipv6_li").show();
+			$("#wan_ipv6").html(ipv6 + " / " + ipv6_hex2mask(ipv6_mask));
+		}
+	}
+	
+	
+	function get_lan_info(){
+		if(top.global_lan_ipv4 && top.global_lan_ipv4!=''){
+			$("#lan_ipv4").html(top.global_lan_ipv4+" / "+top.global_lan_ipv4_mask);
+			$("#lan_ipv6").html(top.global_lan_ipv6+" / "+ipv6_hex2mask(top.global_lan_ipv6_mask));//top.global_lan_ipv6_mask
+			$("#lan_mac").html(top.global_lan_mac + "  (保修专用)");	
+		}else{
+			var request_date = {}; 
+			$.getJSON("<%=luci.dispatcher.build_url("api", "network","get_lan_info")%>",request_date,function(rsp) 
+			{
+				if(rsp.code == 0){
+					$("#lan_ipv4").html(rsp.ipv4[0].ip+" / "+rsp.ipv4[0].mask);
+					$("#lan_ipv6").html(rsp.ipv6[0].ip+" / "+ipv6_hex2mask(rsp.ipv6[0].mask));//rsp.ipv6[0].mask
+					$("#lan_mac").html(rsp.mac + "  (保修专用)");
+					//$("#lan_time").html(millisecondToDate(rsp.uptime));
+				}
+			});
+		}
+	}
+
+	function millisecondToHour(time){
+		return parseInt(time / 3600.0) + i18_hour + parseInt((parseFloat(time / 3600.0) -
+					parseInt(time / 3600.0)) * 60) + i18_minute +
+					parseInt((parseFloat((parseFloat(time / 3600.0) - parseInt(time / 3600.0)) * 60) -
+					parseInt((parseFloat(time / 3600.0) - parseInt(time / 3600.0)) * 60)) * 60) + i18_second;
+	}
+	function millisecondToDate(msd) {
+			var time = parseFloat(msd);
+			if (time != null && time != "") {
+				if (time > 60 && time < 60 * 60) {
+					time = parseInt(time / 60.0) + i18_minute + parseInt((parseFloat(time / 60.0) -
+						parseInt(time / 60.0)) * 60) + i18_second;
+				}
+				else if (time >= 60 * 60 && time < 60 * 60 * 24) {
+					time = millisecondToHour(time);
+				}else if (time >= 24* 60 * 60 ) {
+					var day = parseInt(time  / (3600.0 * 24) );
+					time = time - (day * 3600 * 24);
+					time =  day + i18_day + millisecondToHour(time);
+				}
+				else {
+					time = parseInt(time) + i18_second;
+				}
+			}
+			return time;
+	}
+	
+})
+</script>
+</body>
+</html>

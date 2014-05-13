@@ -1,0 +1,236 @@
+<%
+--[[
+	Info	路由器固件升级
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local mode = luci.http.formvalue("mode")
+local ver  = require "luci.version"
+local adv_menu = luci.util.get_adv_menu()
+local request_uri = luci.http.getenv("REQUEST_URI")
+local board_type = luci.util.get_sys_board()
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+<style type="text/css">
+	.loading-bar{ width: 240px; margin: 0 auto; padding: 1px; border: 1px solid #ddd;}
+	.loading-bar .text{ position: absolute; width: 240px; height: 16px; line-height: 16px; display: block; text-align: center; font-size: 10px; font-family: Arial; color: #666;}
+	.percent{ height: 16px; line-height: 16px;background: #eee; text-align: center;}
+</style>
+</head>
+<body>
+<%
+if mode ~= "out" then
+%>
+<div class="title">
+	<h2>高级设置<i>设置路由器安全 , 及其他高级设置</i></h2>
+</div>
+<%
+end
+%>
+
+<%
+if mode ~= "out" then
+%>
+<div class="menu">
+	<% luci.util.output_adv_menu() %>
+</div>
+<%
+end
+%>
+<div class="box <%if mode ~= "out" then%>setup_box<%end%>" style="text-align: center;">
+	<div>
+	<%
+	if mode == "out" then
+	%>
+	<img src="<%=resource%>/web/images/logo_130726.png"><br><br><br>
+	<%
+	end
+	%>
+	
+	<b style="font-size:20px">路由器固件自助升级</b><br><br><br></div>
+	<div id="down_box" style="display:none;" >
+		<div class="loading-bar" style="position:relative;">
+			<span class="text"><span id="persent">1</span>%</span>
+			<div class="percent" id="persent_width" style="width:1%;"></div>
+		</div><br><br>
+		<span id="down_info">正在下载... <span style="color:red">请不要切断路由器电源</span></span>
+		<br><br>
+		<input type="button" value="现在安装" class="btn" id="up_now" style="display:none;"><br><br>
+	</div>
+	<div style="text-align: center; ">
+		<span id="up_info"></span>
+	</div>
+	<div id="have_new_info" style="display:none;">
+		<span style="background:url(<%=resource%>/web/images/alert.png) no-repeat 5px center;text-align: left;padding: 5px 5px 5px 33px;">有可用更新 版本号 <span id="ver"></span></span>
+		<br><br>
+		<div style="text-align:left;width:450px;padding:0px 10px 20px 80px;" ><span id="changelog" style="display:none;"></span></div>
+	</div>
+	<div id="check_box">
+		<div id="down_load_btn" style="display:none;">
+			<input type="button" value="下载并安装" class="btn" id="down_load"><br><br>
+		</div>
+		<div id="no_new" style="display:none;">
+			已是最新版本 (<%=board_type%> - <% luci.http.write(tw.get_version():match("^([^%s]+)")) %>) , 暂无更新<br>
+			<br><a href="http://www.hiwifi.com/changelog" target="_blank">查看固件更新日志</a>
+		</div>
+		<div id="check_error" style="display:none;">
+			当前版本  (<%=board_type%> - <% luci.http.write(tw.get_version():match("^([^%s]+)")) %>) <a href="javascript:window.location.reload();" target="_blank">重新检查</a><br>
+			<span style="color:red" id="check_errorbox"></span>
+		</div>
+		<div id="loading2">
+			<img src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器" /> 检查更新...
+		</div>
+	</div>
+	<input type="hidden" id="rom_size" value="999999">
+</div>
+
+<script type="text/javascript">
+
+<%
+if mode == "out" then
+%>
+check_new(function(have_new){
+	if (have_new){
+		$("#have_new_info").show();
+		start_download();
+	}
+})
+<%
+end
+%>
+var time_per = 0;
+function flash_percent(callback){
+	var max = parseInt($("#rom_size").val());
+	//system/upgrade_download_percent 
+	var request_date = {"size":max}; 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "system","upgrade_download_percent")%>",request_date,function(rsp) 
+	{ 
+		if(rsp.code == 0){
+			var per = parseInt(rsp.percent); 
+			if(per<101 && per>0) {
+				$("#persent").html(per);
+				$("#persent_width").css("width",per+"%");
+				if (per==100){
+					$("#persent").html(100);
+					$("#persent_width").css("width","100%");
+					$("#down_info").html("下载成功!");
+					$("#up_now").show();
+					clearInterval(time_per);
+					callback();
+				}
+				return true;
+			}  else {
+				clearInterval(time_per);
+				return false
+			}
+		} else {
+			clearInterval(time_per);
+			art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+		}
+	})
+}
+
+function start_download(){
+	$("#down_box").show();
+	$("#check_box").hide();
+	var request_date = {}; 
+	time_per = setInterval("flash_percent(function(){start_up();})",3000);
+	$.getJSON("<%=luci.dispatcher.build_url("api", "system","upgrade_download")%>",request_date,function(rsp) 
+	{
+		if(rsp.code == 0){
+			$("#persent").html(1);
+		} else {
+			setTimeout("self.location.reload();", 2000)
+			art.dialog({icon:"error",title:false,content:"下载失败!"}).lock().time(4);
+		}
+	})
+}
+
+function start_up(){
+	$("#up_now").attr("disabled",true);
+		
+	$("#up_now").hide();
+	$("#down_box").hide();
+	$("#up_info").html("<span style='color:red'>请不要切断路由器电源</span>，5分钟后，HIWIFI 路由器将会自动重启<br>");
+
+	//system/upgrade_flash 
+	var request_date = {"keep":""}; 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "system","upgrade_flash")%>",request_date,function(rsp) 
+	{ 
+		if(rsp.code == 0){
+			
+			<%
+			if mode ~= "out" then
+			%>
+			window.parent.global_dorestart('自动升级路由器固件 <span style="color:red">请不要切断路由器电源</span>',0,true); 
+			window.parent.art.dialog.list['func_box'].close();
+			<%
+			end
+			%>
+			
+		}  else {
+			setTimeout("self.location.reload();", 2000)
+			art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(1.5);
+		}
+	})
+}
+
+function check_new(callback){
+	var have_new=false;
+	//system/upgrade_check 
+	var request_date = {}; 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "system","upgrade_check")%>",request_date,function(rsp) 
+	{ 
+		$("#loading2").hide();
+		if(rsp.code == 0){
+			if(rsp.need_upgrade == 1){
+				$("#ver").html('"'+rsp.version+'"');
+				$("#rom_size").val(rsp.size);
+				if (rsp.changelog && rsp.changelog != ""){
+					$("#changelog").show().html("更新说明:<br>"+rsp.changelog);
+				}
+				have_new = true;
+				callback(have_new);
+			} else {
+				$("#no_new").show();
+			}
+		} else {
+			//art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+			$("#check_error").show();
+			$("#check_errorbox").html(rsp.msg);
+			callback(have_new);
+		}
+	})
+}
+
+$(function(){
+	check_new(function(have_new){
+		if (have_new){
+			$("#have_new_info").show();
+			$("#down_load_btn").show();
+		}
+	})
+	
+	$("#down_load").click(function(){
+		start_download();
+	});
+	
+	$("#up_now").click(function(){
+		start_up();
+	});
+	
+})
+
+</script>
+</body>
+</html>

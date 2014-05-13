@@ -1,0 +1,255 @@
+<%
+local ver  = require "luci.version"
+local util = require "luci.util"
+
+-- set HAVESETSAFE
+luci.util.set_agreement_switch("HAVESETSAFE", 1)
+
+--local _,_,_,wifi_ssid = util.get_wifi_device_status()
+local wifi_status,wifi_device,wifi_ifname,wifi_ssid,wifi_encryption,wifi_channel,wifi_mode = luci.util.get_wifi_device_status()
+
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>极路由｜首次安装－修改无线密码</title>
+<link rel="stylesheet" href="<%=resource%>/guide/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script src="<%=resource%>/guide/js/jquery-1.8.2.min.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/custom_checkbox_and_radio.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/web/js/util.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/application.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+    <div id="page">
+        <div id="header">
+            <h1><span id="logo">极路由｜首次安装</span></h1>
+        </div><!-- /header -->
+                
+        <div id="content">
+            <div class="ssid">
+                <h2 style="font-size: 1.3em;">设置Wi-Fi名称和密码</h2>
+                <p style="color: green;">防蹭网，保障上网安全</p>
+                <h2 id="ssid_name" style="display:none"><%=wifi_ssid%></h2>
+                <form id="form1">
+                    <input type="text" class="txt radius J_ssid" maxLength="32" minLength="1" placeholder="Wi-Fi名称" value="<%=wifi_ssid%>" placeholder="Wi-Fi名称" name="ssid" />
+                    <select id="encryption_select" name="encryption" class="txt-input select" style="display:none;">
+                        <option value="none">无加密</option>
+                        <option value="mixed-psk">强加密(WPA/WPA2个人版)</option>
+                    </select>
+                    <input type="text" class="txt radius J_ssid_key" placeholder="Wi-Fi密码不少于8位" blank="true" maxLength="63" minLength="8"  errorText="Wi-Fi密码不能少于8个字符" name="key" />
+                    <input type="hidden" name="device" value="radio0.network1" class="device">
+                    <p id="errormsg" class="error"></p>
+                    <p id="ssid_change_show" style="display:none; background: #FFD400; border-color: #FFD400; color: #000; font-size: 14px;"></p>
+                    <a id="submit_btn" class="btn radius">保存设置</a>
+                </form>
+                <!--
+                <a id="complete_btn" href="javascript:void();" class="link skip">跳过</a>
+                -->
+            </div>
+        </div><!-- /content -->
+
+        <div id="footer">
+        </div><!-- /footer -->
+    </div><!-- /page -->
+</body>
+<script type="text/javascript">
+var old_wifi_ssid = '<%=wifi_ssid%>';
+var saving = false;
+var wifi_change = false;
+var guide_online = '<%=luci.dispatcher.build_url("admin_web", "guide","guide_online")%>';
+var new_ssid;
+var timeout = 35000;
+var sec;
+
+$(function(){
+    $('.J_ssid').blur(function(){
+        $(this).lengthCheck({'blurCheck':true,'errorClass':'input-error'});
+    })
+    $('.J_ssid_key').blur(function(){
+        $(this).lengthCheck({'blurCheck':true,'errorClass':'input-error'});
+    })
+    
+    $("#complete_btn").click(function(){
+        set_agreement_done(function(){
+            setTimeout("complete()", 500);
+        });
+    });
+    
+    listerenterkeydown(function(){
+        set_agreement_done(function(){
+            form_submit();
+        });
+    });
+    
+    $("#submit_btn").click(function(){
+        set_agreement_done(function(){
+            form_submit();
+        });
+    });
+});
+
+function listerenterkeydown(down){
+    document.onkeydown = function(e){     
+        var ev = document.all ? window.event : e;    
+        if(ev.keyCode==13) {  
+            down();
+        }
+    }
+}
+
+function form_submit(){
+    $('.J_ssid').lengthCheck({'blurCheck':true,'errorClass':'input-error'});
+    $('.J_ssid_key').lengthCheck({'blurCheck':true,'errorClass':'input-error'});
+    if($(".input-error").size() > 0){
+        return;
+    }
+    if(saving == true){
+        return;
+    }
+    $("#ssid_change_show").hide();
+    $(".error").html('');
+    saving = true;
+    new_ssid = $("input[name='ssid']").val();
+    var wifi_password = $("input[name='key']").val();
+    if(HaveChineseStr(wifi_password)){
+        $(".error").html('密码只能使用英文符号及数字');
+        saving = false;
+        return;
+    } else {
+        $("#submit_btn").show();
+        sec = Math.ceil(timeout/1000);
+        saving = true;
+        update_btn();
+        if(old_wifi_ssid != new_ssid || wifi_password != ''){
+            $("#ssid_name").html(new_ssid);
+            $("#ssid_change_show").show();
+            $("#ssid_change_show").html('Wi-Fi重启，请手动连接 '+new_ssid);
+            
+            if(wifi_password.length > 0){
+                $("#encryption_select option[value='mixed-psk']").attr("selected", true); 
+            }else{
+                $("#encryption_select option[value='none']").attr("selected", true); 
+            }
+            set_agreement_done();
+            setTimeout("wifi_info()", 2000);
+            
+            var request_date =  $("#form1").serialize();
+            $.ajax({
+              url: "<%=luci.dispatcher.build_url("api", "wifi","set_base")%>",
+              dataType: 'json',
+              timeout: 10000, //10 seconds timeout
+              type: "POST",
+              data: request_date,
+              success: function(rsp,item) {  
+                    if(rsp.code == 0){
+                       var ssid = rsp.msg;
+                       if(old_wifi_ssid != ssid || wifi_password != ''){
+                            wifi_change = true;
+                       }
+                       complete(ssid);
+                    } else {
+                       $(".error").html(rsp.msg);
+                       $("#submit_btn").html('保存设置');
+                       saving = false;
+                       $("#submit_btn").show();
+                       $("#ssid_change_show").hide();
+                    }
+                },
+                error: function(x, t, m) {
+                   //$(".error").html('保存失败');
+                   //$("#submit_btn").html('保存设置');
+                   //saving = false;
+                   //saving = false;
+                }
+            });
+        }else{
+            complete(new_ssid);
+        }
+    }
+}
+
+function update_btn(){
+    if(saving == true){
+        if(sec > 0){
+            var mod = sec % 3;
+            if(mod == 0){
+                $("#submit_btn").html("正在保存中...");
+            }else if(mod == 1){
+                $("#submit_btn").html("正在保存中..");
+            }else if(mod == 2){
+                $("#submit_btn").html("正在保存中.");
+            }else{
+                $("#submit_btn").html("正在保存中...");
+            }
+            setTimeout("update_btn()", 1000);
+            sec = sec - 1;
+        }else{
+            $("#submit_btn").html("保存设置");
+        }
+    }else{
+        $("#submit_btn").html("保存设置");
+    }
+}
+
+function complete(ssid){
+    if(wifi_change == true){
+        $("#ssid_name").text(ssid);
+        $("#ssid_change_show").show();
+        $("#ssid_change_show").html('Wi-Fi名称已修改，请手动连接 '+ssid);
+        $.getJSON("<%=luci.dispatcher.build_url("api", "wifi","restart")%>",{},function(rsp) {
+            window.location = guide_online;
+        });
+    }else{
+        $(".error").html('跳转中...');
+        window.location = guide_online;
+    }
+}
+
+function wifi_info(){
+    //wifi/view_detail 
+    var last_dev = '<%=wifi_device%>';
+    var request_date = {"device":last_dev};
+    $.getJSON("<%=luci.dispatcher.build_url("api", "wifi","view_detail")%>",request_date,function(rsp) 
+    {  
+        if(rsp.code == 0){
+            //wifi 是否开启                 
+            if(rsp.status == 1){
+                if(rsp.ssid == new_ssid){
+                    window.location = guide_online;
+                }else{
+                    //$(".error").html('你连接的Wi-Fi不是'+new_ssid);
+                    setTimeout("wifi_info()", 1000);
+                }
+            } else if (rsp.status == 0){        //未开启
+                setTimeout("wifi_info()", 1000);
+            }
+        } else {
+            setTimeout("wifi_info()", 2000);
+        }
+    }).fail(function(rsp){
+        //$(".error").html('未连接到'+new_ssid);
+        setTimeout("wifi_info()", 1000);
+    });
+}
+
+function set_agreement_done(success_callback){
+    //system/set_agreement_done 
+    var request_date = {}; 
+    $.getJSON("<%=luci.dispatcher.build_url("api", "system","set_agreement_done")%>",request_date,function(rsp) 
+    {
+       if(rsp && (rsp.code == 0 || rsp.code == "0")){
+          if(typeof(success_callback) == "function"){
+            success_callback();
+          }
+       }else{
+        setTimeout("set_agreement_done()", 1000);
+       }
+    }).fail(function(){
+        setTimeout("set_agreement_done()", 1000);
+    })
+}
+
+</script>   
+</html>

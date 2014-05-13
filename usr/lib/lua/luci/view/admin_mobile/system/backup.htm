@@ -1,0 +1,69 @@
+<%
+local ver  = require "luci.version"
+local util  = require "luci.util"
+local http = require "luci.http"
+math.randomseed(os.time())
+local random = math.random()
+%>
+<%+header%>
+<div>
+	<div class="box tips">
+		可备份或还原设备名称、限速设备、可疑设备及信任设备
+	</div>
+	<div id="backup_info_div"></div>
+	<p>
+	<input type="button" value="备份" class="btn inline fl" id="backup_btn">
+	</p>
+	<p>
+	<input type="button" value="还原" class="btn inline fl" id="restore_btn">
+	</p>
+</div>
+
+<script type="text/javascript">
+function update_backup_info(){
+    $.getJSON("<%=luci.dispatcher.build_url('api','system', 'backup_info')%>?<%=random%>", {},
+        function(data){
+         if(data.code == "0"){
+            if(data.backup == "1"){
+                $("#backup_info_div").html('<font color="green">上次备份：'+data.mtime+'</font>');
+            }else{
+                $("#backup_info_div").html('<font color="red">无备份</font>');
+            }
+         }else{
+            $("#backup_info_div").html(data.msg);
+         }
+        }
+     );
+}
+
+$(function (){
+    update_backup_info();
+    
+    $("#backup_btn").click(function(){
+        $.post("<%=luci.dispatcher.build_url('api','system', 'backup_user_conf')%>?<%=random%>", {},
+            function(data){
+             if(data.code == "0"){
+                update_backup_info();
+                alert('备份成功');
+             }else{
+                alert(data.msg);
+             }
+            }
+         ,"json");
+    });
+    
+    $("#restore_btn").click(function(){
+        $.post("<%=luci.dispatcher.build_url('api','system', 'restore_user_conf')%>?<%=random%>", {},
+            function(data){
+             if(data.code == "0"){
+                alert('还原成功');
+             }else{
+                alert(data.msg);
+             }
+            }
+         ,"json");
+    });
+});
+
+</script>
+<%+footer%>

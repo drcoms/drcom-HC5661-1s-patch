@@ -1,0 +1,35 @@
+<%
+local ver  = require "luci.version"
+local util  = require "luci.util"
+local deviceReq = "radio0.network1"
+local http = require "luci.http"
+local protocol = require "luci.http.protocol"
+local tw = require "tw"
+local util = require "luci.util"
+
+local srcurl = luci.util.exec("cat /tmp/firstsrcurl 2>/dev/null")
+if srcurl ~= nil then
+    srcurl = luci.util.fliter_unsafe(luci.http.urlencode(srcurl))
+end
+
+%>
+<!DOCTYPE html>
+<html style="height:100%; overflow: hidden;padding-bottom: 81px;">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=yes" /> 
+<title>极路由－设置完成</title>
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="stylesheet" href="<%=resource%>/guide/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script src="<%=resource%>/guide/js/jquery-1.8.2.min.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/web/js/dropdowntabs.js" type="text/javascript" language="javascript"></script>
+</head>
+<body id="toolpage">
+<script type="text/javascript">
+var srcurl = '<%=srcurl%>';
+$(function(){
+    window.location.href = 'http://www.hiwifi.com/twxredirect/?type=guide&mac=<%http.write(tw.get_mac())%><%if srcurl ~= nil then%>&url=<%=srcurl%><%end%>';
+})
+</script>
+</body>
+</html>

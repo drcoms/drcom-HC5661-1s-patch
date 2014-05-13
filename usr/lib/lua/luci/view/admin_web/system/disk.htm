@@ -1,0 +1,253 @@
+<%
+--[[
+	Info	硬件诊断
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local ver  = require "luci.version"
+local adv_menu = luci.util.get_adv_menu()
+local request_uri = luci.http.getenv("REQUEST_URI")
+local IS_HC6361 = (luci.util.get_sys_board() == "HC6361")
+local status
+local status_code
+local sd_status_result
+local sd_status
+local sd_status_detail = {}
+local sd_status_detail_sp
+local sd_status_detail_fstype
+local sd_status_detail_sdstatus
+local sd_status_detail_sdstatus_show
+local sd_test_button = ""
+
+if IS_HC6361 then 
+	status = "正常"
+	status_code = 0
+	
+	local ms_result = luci.util.exec('dmesg | egrep -i "EXT4-fs.*error" | wc -l')
+	ms_result = string.sub(ms_result,1,1)
+	if ms_result ~= "0" then
+		status = '<span style="color:red">文件系统错误</span>'
+		status_code = 99
+	end 
+else 
+	sd_status_result = luci.util.exec('df -m | grep "/dev/mmc"')
+	
+	if nixio.fs.access("/tmp/sdinfo.txt") then
+		local fd = io.open("/tmp/sdinfo.txt", "r")
+		while true do
+			local ln = fd:read("*l")
+			
+			if not ln then
+				break
+			else
+				local name,status_tmp = ln:match("^(%S+)=(%S+)")
+				if name and status_tmp then
+					sd_status_detail[name] = status_tmp
+				end
+			end
+		end
+		sd_status_detail_sp	= math.modf(tonumber(sd_status_detail['sdsize'])*1024*1024/100000000)/10;
+		sd_status_detail_fstype = sd_status_detail['fstype']
+		sd_status_detail_sdstatus = sd_status_detail['sdstatus']
+		if sd_status_detail_sdstatus == "ro" then
+			sd_status_detail_sdstatus_show = "只读"
+		else 
+			sd_status_detail_sdstatus_show = ""
+			sd_test_button = "<a href='javascript:void();' id='get_sd_status'>测速 </a>"
+		end
+		
+		sd_status = "已插入 <b>"..sd_status_detail_sp.."GB ("..sd_status_detail_fstype.." "..sd_status_detail_sdstatus_show..")</b> "..sd_test_button
+	else 
+		sd_status = "未插入"
+	end
+end
+
+
+local remote_script_enable_file = '/etc/config/remote_script_enable'
+local remote_script_enable = false
+if nixio.fs.access(remote_script_enable_file) then
+	remote_script_enable = true
+end
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+<div class="title">
+	<h2>高级设置<i>设置路由器安全 , 及其他高级设置</i></h2>
+</div>
+<div class="menu">
+	<% luci.util.output_adv_menu() %>
+</div>
+
+<div class="box setup_box">
+	<%if IS_HC6361 then %>
+		<div class="memu row" style="padding-left: 50px;">
+			<p><label><b>存储状态</b></label><span style="margin-left:100px;"><%=status%></span>
+			<%if status_code ~= 0 then %>
+				<input type="button" value="强制格式化存储" class="btn" style="padding: 0 20px;" id="reset_btn">
+				(强制格式化可修复文件系统错误)
+			<%end%>
+			</p>
+		</div>
+	<% else %>
+		<div class="memu row" style="padding-left: 50px;">
+			<p><label><b>SD 卡状态</b></label><span style="margin-left:100px;"><%=sd_status%></span></p>
+			<div id="loading1" style="margin-left:100px;display:none;">
+				<img src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器" />
+			</div>
+			<div style="margin-left:100px;display:none;" id="sd_status_box">
+				<b>写入速度 </b> - <span id="writespeed"></span><br>
+				<b>读取速度 </b> - <span id="readspeed"></span><br>
+				<br>
+			</div>
+		</div>
+	<% end %>
+	<br />
+	<div class="memu row" style="padding-left: 50px;">
+		<p><label><b>路由器模式</b></label><select name="mode" class="txt slt">
+			<option value="hiwifi">极路由智能模式</option>
+			<option value="normal">普通路由模式</option>
+		</select>
+		<input type="hidden" name="old_mode" value="" />
+		<input type="button" value="<%:保存%>" class="btn" id="submit_btn" disabled="disabled"/>
+		<img style="display:none;" id="loading2" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器" />
+		</p>
+		<div class="ps">
+			本页仅客服和用户确认问题使用，用户无需自行设置。<br />
+			(如果出现兼容性问题，可以手动设置为“普通路由器模式”，然后与客服联系。)
+		</div>
+	</div>
+	<br>
+	<br>
+	<div class="memu row" style="padding-left: 50px;">
+		<p><label><b>允许远程调试</b></label>
+		<span style="margin-left:100px;"><input name="remote_script" type="checkbox" value="1" <%if remote_script_enable then%> checked="checked"<%end%>/>&nbsp&nbsp&nbsp<input type="button" value="<%:保存%>" class="btn" id="submit_btn_debug"/></span>
+		</p>
+	</div>
+</div>
+<script type="text/javascript">
+$(function(){	
+	$("#reset_btn").click(function(){
+		art.dialog({
+			title:false,
+		    content: '是否执行格式化并重启，重启将断开和路由器的连接！',
+		    icon: 'warning',
+		    id: "wating_box",
+		    ok: function(){
+		    	
+		    	this.close();
+		    	//system/format_disk 
+				var request_date = {}; 
+				$.getJSON("<%=luci.dispatcher.build_url("api", "system","format_disk")%>",request_date,function(rsp) 
+				{ 
+					if(rsp.code == 0){
+						window.parent.global_dorestart('格式化存储，重启路由器'); 
+						window.parent.art.dialog.list['func_box'].close();
+					}  
+				})
+
+		        return false;
+		    },
+		    okVal: "现在格式化", 
+		    cancel: function(){
+		        this.close();
+		        return false;
+		    }
+		}).lock();
+	})
+	
+	$("#get_sd_status,#reflash_sd").click(function(){
+		reflash_sd_status();
+	})
+	
+	//system/get_nginx_mode 
+	var request_date = {}; 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "system","get_nginx_mode")%>",request_date,function(rsp) 
+	{ 
+
+		//auto fill--  
+		$("select[name='mode']").val(rsp.mode);  
+		$("input[name='old_mode']").val(rsp.mode);  
+		$("#submit_btn").attr("disabled",false);
+		
+	})
+
+	$("#submit_btn_debug").click(function(){
+		if ($("input[name='remote_script']:checked").val()){
+			var remote_script_status = 1;
+		} else {
+			var remote_script_status = 0;
+		}
+		var request_date =  {"status":remote_script_status}; 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "system","set_remote_script")%>",request_date,function(rsp) 
+		{ 
+			if(rsp.code == 0){
+				window.parent.art.dialog({icon:"succeed",title:false,content:"设置成功."}).lock().time(4);
+			} else {
+				art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+			}
+		})
+	})
+	$("#submit_btn").click(function(){
+		//这里需要初始化
+		$("#loading2").show();
+		$("#submit_btn").attr("disabled",true);
+		if($("select[name='mode']").val() == $("input[name='old_mode']").val()){
+			window.parent.art.dialog({icon:"succeed",title:false,content:"参数没有变动."}).lock().time(4);
+			$("#loading2").hide();
+			$("#submit_btn").attr("disabled",false);
+		} else {
+			$("input[name='old_mode']").val($("select[name='mode']").val());
+			setTimeout('$("#loading2").hide();$("#submit_btn").attr("disabled",false);window.parent.art.dialog({icon:"succeed",title:false,content:"设置成功"}).lock().time(5);',2000);
+			var mode_ipt = $("select[name='mode']").val();
+			var request_date =  {"mode":mode_ipt}; 
+			$.getJSON("<%=luci.dispatcher.build_url("api", "system","set_nginx_mode")%>",request_date,function(rsp)
+			{ 
+				if(rsp.code != 0){
+					art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+				}
+			});
+			
+		}
+	})
+	
+})
+
+function reflash_sd_status(){
+	var request_date = {}; 
+	$("#loading1").show();
+	$("#sd_status_box").hide();
+	$.getJSON("<%=luci.dispatcher.build_url("api", "system","check_sd_status")%>",request_date,function(rsp) 
+	{ 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "system","get_sd_status")%>",request_date,function(rsp2) 
+		{
+			if(rsp2.code == 0){
+				$("#loading1").hide();
+				$("#sd_status_box").show();
+				
+				var writespeed =  rsp2.writespeed;
+				var readspeed =  rsp2.readspeed;
+				
+				$("#writespeed").html(writespeed);
+				$("#readspeed").html(readspeed);
+				
+			} else {
+				art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+			}
+		})
+	})
+}
+
+</script>
+</body>
+</html>

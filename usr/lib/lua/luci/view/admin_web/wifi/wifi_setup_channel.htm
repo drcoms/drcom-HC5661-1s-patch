@@ -1,0 +1,259 @@
+<%
+--[[
+	Info	wifi 频道设置
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local ver  = require "luci.version"
+local is_wisp = false
+
+local uci = require "luci.model.uci"
+_uci_real  = uci.cursor()
+local wan_if = _uci_real:get("network", "wan", "ifname")
+
+local hiwifi_net = require "hiwifi.net"
+local WIFI_IFNAMES
+
+WIFI_IFNAMES = hiwifi_net.get_wifi_ifnames()
+local IFNAME = WIFI_IFNAMES[2]
+
+if wan_if == IFNAME then 
+	is_wisp = true
+end	
+
+local adv_menu = luci.util.get_adv_menu()
+local request_uri = luci.http.getenv("REQUEST_URI")
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+
+<style type="text/css">
+	table.zone td.tor{
+		text-align: right;
+		width:120px;
+		line-height:14px;
+	}
+	#not_support{
+		color:red;
+		padding-left: 100px;
+		display:none;
+	}
+</style>
+<div class="title">
+	<h2>高级设置<i>设置路由器安全 , 及其他高级设置</i></h2>
+</div>
+<div class="menu">
+	<% luci.util.output_adv_menu() %>
+</div>
+
+<div class="box setup_box">
+	<form id="form1"> 
+	<ul class="ullist">
+	<li>
+		<div class="memu row">
+			<p><label>无线信道</label><select name="channel" class="txt slt"  style="width: 97px"  <% if is_wisp then%>disabled="disabled"<% end %>>
+				<option value="0">自动</option>
+				<option value="1">1</option>
+				<option value="2">2</option>
+				<option value="3">3</option>
+				<option value="4">4</option>
+				<option value="5">5</option>
+				<option value="6">6</option>
+				<option value="7">7</option>
+				<option value="8">8</option>
+				<option value="9">9</option>
+				<option value="10">10</option>
+				<option value="11">11</option>
+				<option value="12">12</option>
+				<option value="13">13</option>
+			</select>
+			<span id="channel_autoreal"></span>
+			<% if is_wisp then%><span style="color:red">(无线中继模式不可调整无线信道)</span><% end %>
+			</p> 
+			<span id="not_support"></span>
+		</div>
+		<div class="memu row">
+			<p><label>信号强度</label><select name="txpwr" class="txt slt">
+				<option value="max">强</option>
+				<option value="mid">中</option>
+				<option value="min">环保模式</option>
+				<option value="140">穿墙模式</option>
+			</select>
+			</p>
+		</div>
+	</li>
+
+	<li>
+		<div class="btnbox" style="padding-left:190px;">
+			<input type="hidden" name="old_channel" value="" />
+			<input type="hidden" name="old_txpwr" value="" />
+			<input type="hidden" name="device" value="radio0.network1" />
+			<input type="button" value="<%:保存%>" class="btn" id="submit_btn" disabled="disabled"/>
+			<img style="display:none;" id="loading2" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器" />
+		</div>
+	</li>
+	</ul>
+	</form>
+</div>
+<script type="text/javascript">
+function show_not_support(show){
+	if(show){
+		$("#not_support").show().html("部分非中国大陆分机型可能无法连接12 或 13信道");
+	} else {
+		$("#not_support").hide().html();
+	}
+}
+$(function(){
+	
+	//$.ajaxSettings.async = false;
+	//wifi/get_channel 
+	var request_date = {"device":"radio0.network1"}; 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_channel")%>",request_date,function(rsp) 
+	{
+
+		if(rsp.code == 0){ 
+			//auto fill--  
+			if(rsp.channel == "" || rsp.channel == "0"){
+				$("#channel_autoreal").html("自动选择信道 - "+rsp.channel_autoreal);
+			}
+			
+			if(rsp.channel == "12" || rsp.channel == "13" || rsp.channel_autoreal=="12" || rsp.channel_autoreal=="13"){
+				show_not_support(true);
+			} else {
+				show_not_support(false);
+			}
+
+			$("select[name='channel']").val(rsp.channel);  
+			$("input[name='old_channel']").val(rsp.channel);  
+			$("#submit_btn").attr("disabled",false);
+			if(top.global_wifi_channel){
+				top.global_wifi_channel = rsp.channel;
+			}
+		}else{
+			art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(1.5);
+		}
+	})
+	
+	$("select[name='channel']").change(function(){
+		if($(this).val() == "12" || $(this).val() == "13"){
+			show_not_support(true);
+		} else {
+			show_not_support(false);
+		}
+	})
+	
+	//wifi/get_txpwr 
+	var request_date = {"device":"radio0.network1"}; 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_txpwr")%>",request_date,function(rsp) 
+	{
+		if(rsp.code == 0){ 
+			//auto fill--  
+			$("select[name='txpwr']").val(rsp.txpwr);  
+			$("input[name='old_txpwr']").val(rsp.txpwr);  
+			$("#submit_btn").attr("disabled",false);
+		}else{
+			art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(1.5);
+		}
+	})
+	
+	//wifi/set_channel 
+	//提交
+	var data_callnum = 0;  //计数器，需要等待几次有效返回，用于最终结果显示
+	var data_error = false;//异步提交是否有错误，用于最终结果显示
+	var data_info = "";//返回的信息，用于最终结果显示
+	$("#submit_btn").click(function(){
+		//这里需要初始化
+		data_callnum = 0;
+		data_error = false;
+		data_info = "";
+		
+		$("#loading2").show();
+		$("#submit_btn").attr("disabled",true);
+		var changed = false;
+		var error = false;
+		var info = "";
+		var channel_changed = false;
+		var txpwr_changed = false;
+		if($("select[name='channel']").val() != $("input[name='old_channel']").val()){
+			channel_changed = true;
+			data_callnum++;
+		}
+		if($("select[name='txpwr']").val() != $("input[name='old_txpwr']").val()){
+			txpwr_changed = true;
+			data_callnum++;
+		}
+		if($("select[name='channel']").val() != $("input[name='old_channel']").val()){	//两个值没有改变
+			changed = true;
+			var request_date =  $("#form1").serializeArray(); 
+			$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","set_channel")%>",request_date,function(rsp) 
+			{ 
+				if(rsp.code == 0){
+					info = "设置无线信道成功!";
+					$("input[name='old_channel']").val($("select[name='channel']").val())
+					if(top.global_wifi_channel){
+						top.global_wifi_channel = $("select[name='channel']").val();
+					}
+				}else{
+					info = rsp.msg;
+					error = true;
+				}
+				data_callback(info,error);//回调一次
+			});
+		}
+		if($("select[name='txpwr']").val() != $("input[name='old_txpwr']").val()){	//两个值没有改变
+			changed = true;
+			var request_date =  $("#form1").serializeArray(); 
+			$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","set_txpwr")%>",request_date,function(rsp) 
+			{ 
+				if(rsp.code == 0){
+					info = "设置信号强度成功!";
+					$("input[name='old_txpwr']").val($("select[name='txpwr']").val())
+				}else{
+					info = rsp.msg;
+					error = true;
+				}
+				data_callback(info,error);//回调一次
+			});
+		}
+		
+		if(!changed){
+			window.parent.art.dialog({icon:"succeed",title:false,content:"参数没有变动."}).lock().time(4);
+			$("#loading2").hide();
+			$("#submit_btn").attr("disabled",false);
+		}
+		
+	});
+	
+	//等待多次异步请求，最终显示
+	function data_callback(info,error){
+		data_callnum--;
+		if(error){
+			data_error = error;
+		}
+		data_info += "<br/>"+info;
+		
+		if(data_callnum<=0){
+			if(error){
+				window.parent.art.dialog({icon:"error",title:false,content:data_info}).lock().time(4);	
+			}else{
+				window.parent.art.dialog({icon:"succeed",title:false,content:data_info}).lock().time(4);	
+			}
+			$("#loading2").hide();
+			$("#submit_btn").attr("disabled",false);
+		}
+	}
+	
+})
+</script>
+</body>
+</html>

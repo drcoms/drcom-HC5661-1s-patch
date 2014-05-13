@@ -1,0 +1,42 @@
+<%
+--[[
+	Info	网络诊断页
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+local ver  = require "luci.version"
+local urlReq = luci.util.fliter_unsafe(luci.http.formvalue("url"))
+if urlReq == nil then
+	urlReq = ""
+end
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<meta name="viewport" content="width=device-width, initial-scale=0.7,  minimum-scale=0.5, maximum-scale=2.0"/>
+<title>路由器网络诊断</title>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery.cookie.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/interface.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+</body>
+<script language="javascript" type="text/javascript">
+var from_url = '<%=urlReq%>';
+format_is_mobile();
+var newurl = "";
+if(needJumpMobile()){
+    // Use new detect for mobile
+    newurl = "/cgi-bin/turbo/admin_mobile/net_detect_1";
+} else {
+    // Use new detect for pc
+    newurl = "/cgi-bin/turbo/admin_web/system/net_detect_1";
+}
+if(from_url != ''){
+    newurl = newurl + '?url='+from_url;
+}
+window.location.href = newurl;
+</script>
+</html>

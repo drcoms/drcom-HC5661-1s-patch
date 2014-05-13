@@ -1,0 +1,85 @@
+<%
+--[[
+	Info	引导安装或打开 APP
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local ver  = require "luci.version"
+
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+<style type="text/css">
+	.loading-bar{ width: 240px; margin: 0 auto; padding: 1px; border: 1px solid #ddd;}
+	.loading-bar .text{ position: absolute; width: 240px; height: 16px; line-height: 16px; display: block; text-align: center; font-size: 10px; font-family: Arial; color: #666;}
+	.percent{ height: 16px; line-height: 16px;background: #eee; text-align: center;}
+	div{display:none;}
+</style>
+<meta name="viewport" content="width=device-width" />   
+</head>
+    <body>   
+    	<div class="ioslink">
+    	你用 IOS 设备打开本页 <br>
+        <a id="ioslink" href="hiwifi://">打开 APP （IOS 版本） </a>   
+        </div>
+        
+        <div class="androidlink">
+       	 你用  Android 设备打开本页 <br>
+        <a id="androidlink" href="market://search?q=com.singtel.travelbuddy.android">打开 APP （ANDROID 版本） </a>   
+        </div>
+        
+        <div class="downlink">
+                    你用 电脑设备打开本页 <br>
+        <a id="downlink" href="http://www.hiwifi.com/m" target="_blank">下载 APP </a>   
+		</div>
+		
+        <script type="text/javascript">
+        	$(function(){
+        		var browser={
+       			    versions:function(){
+       			            var u = navigator.userAgent, app = navigator.appVersion;
+       			            return {         //移动终端浏览器版本信息
+       			                mobile: !!u.match(/AppleWebKit.*Mobile.*/), //是否为移动终端
+       			                ios: !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/), //ios终端
+       			                android: u.indexOf('Android') > -1 || u.indexOf('Linux') > -1, //android终端或uc浏览器
+       			            };
+       			         }(),
+       			         language:(navigator.browserLanguage || navigator.language).toLowerCase()
+       				}
+        		if(browser.versions.ios){
+        			$(".ioslink").show();
+        		} else if (browser.versions.android){
+        			$(".androidlink").show();
+        		} else {
+        			$(".downlink").show();
+        		}
+       	})
+        
+            var appstore = "https://itunes.apple.com/us/app/hiwifi/id598232355?mt=8";
+            var AndoridDownload = "http://www.hiwifi.com/download/Android/";
+            function applink(fail){  
+                return function(){  
+                    var clickedAt = +new Date;  
+                    // During tests on 3g/3gs this timeout fires immediately if less than 500ms.  
+                    setTimeout(function(){  
+                              // To avoid failing on return to MobileSafari, ensure freshness!  
+                              if (+new Date - clickedAt < 2000){  
+                              	window.location = fail;  
+                              }
+                              }, 500);      
+                };  
+            }  
+            document.getElementById("ioslink").onclick = applink(appstore);  
+            document.getElementById("androidlink").onclick = applink(AndoridDownload);  
+        </script>
+    </body>   
+</html>  

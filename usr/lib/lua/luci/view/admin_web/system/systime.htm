@@ -1,0 +1,268 @@
+<%
+--[[
+	Info	wifi 频道设置
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local ver  = require "luci.version"
+local sys_time_all = os.date("%Y-%m-%d %X", os.time())
+local sys_date = os.date("%Y-%m-%d", os.time())
+local h = os.date("%H", os.time())
+local mi = os.date("%M", os.time())
+local s = os.date("%S", os.time())
+
+-- date -s YYYY-MM-DD hh:mm[:ss]
+
+local adv_menu = luci.util.get_adv_menu()
+local request_uri = luci.http.getenv("REQUEST_URI")
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/DatePicker/WdatePicker.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+
+<style type="text/css">
+	table.zone td.tor{
+		text-align: right;
+		width:120px;
+		line-height:14px;
+	}
+</style>
+<div class="title">
+	<h2>高级设置<i>设置路由器安全 , 及其他高级设置</i></h2>
+</div>
+<div class="menu">
+	<% luci.util.output_adv_menu() %>
+</div>
+
+<div class="box setup_box">
+	<form id="form1"> 
+	<ul class="ullist">
+	<li>
+		<div class="memu row tie">
+			<p><label>当前系统时间：</label><span id="channel_autoreal" style="margin-left:100px;"><%=sys_time_all%></span></p> 
+		</div>
+		<div class="memu row tie">
+			<p><label>修改为</label>&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp
+			<input class="Wdate" name="date" type="text" onClick="WdatePicker()" value="<%=sys_date%>" style="width:100px;"/>
+			<select name="h" >
+				<option value="00">00</option>
+				<option value="01">01</option>
+				<option value="02">02</option>
+				<option value="03">03</option>
+				<option value="04">04</option>
+				<option value="05">05</option>
+				<option value="06">06</option>
+				<option value="07">07</option>
+				<option value="08">08</option>
+				<option value="09">09</option>
+				<option value="10">10</option>
+				<option value="11">11</option>
+				<option value="12">12</option>
+				<option value="13">13</option>
+				<option value="14">14</option>
+				<option value="15">15</option>
+				<option value="16">16</option>
+				<option value="17">17</option>
+				<option value="18">18</option>
+				<option value="19">19</option>
+				<option value="20">20</option>
+				<option value="21">21</option>
+				<option value="22">22</option>
+				<option value="23">23</option>
+				<option value="24">24</option>
+			</select>时
+			<select name="mi" >
+				<option value="00">00</option>
+				<option value="01">01</option>
+				<option value="02">02</option>
+				<option value="03">03</option>
+				<option value="04">04</option>
+				<option value="05">05</option>
+				<option value="06">06</option>
+				<option value="07">07</option>
+				<option value="08">08</option>
+				<option value="09">09</option>
+				<option value="10">10</option>
+				<option value="11">11</option>
+				<option value="12">12</option>
+				<option value="13">13</option>
+				<option value="14">14</option>
+				<option value="15">15</option>
+				<option value="16">16</option>
+				<option value="17">17</option>
+				<option value="18">18</option>
+				<option value="19">19</option>
+				<option value="20">20</option>
+				<option value="21">21</option>
+				<option value="22">22</option>
+				<option value="23">23</option>
+				<option value="24">24</option>
+				<option value="25">25</option>
+				<option value="26">26</option>
+				<option value="27">27</option>
+				<option value="28">28</option>
+				<option value="29">29</option>
+				<option value="30">30</option>
+				<option value="31">31</option>
+				<option value="32">32</option>
+				<option value="33">33</option>
+				<option value="34">34</option>
+				<option value="35">35</option>
+				<option value="36">36</option>
+				<option value="37">37</option>
+				<option value="38">38</option>
+				<option value="39">39</option>
+				<option value="40">40</option>
+				<option value="41">41</option>
+				<option value="42">42</option>
+				<option value="43">43</option>
+				<option value="44">44</option>
+				<option value="45">45</option>
+				<option value="46">46</option>
+				<option value="47">47</option>
+				<option value="48">48</option>
+				<option value="49">49</option>
+				<option value="50">50</option>
+				<option value="51">51</option>
+				<option value="52">52</option>
+				<option value="53">53</option>
+				<option value="54">54</option>
+				<option value="55">55</option>
+				<option value="56">56</option>
+				<option value="57">57</option>
+				<option value="58">58</option>
+				<option value="59">59</option>
+				<option value="60">60</option>
+			</select>分
+			<select name="s">
+				<option value="00">00</option>
+				<option value="01">01</option>
+				<option value="02">02</option>
+				<option value="03">03</option>
+				<option value="04">04</option>
+				<option value="05">05</option>
+				<option value="06">06</option>
+				<option value="07">07</option>
+				<option value="08">08</option>
+				<option value="09">09</option>
+				<option value="10">10</option>
+				<option value="11">11</option>
+				<option value="12">12</option>
+				<option value="13">13</option>
+				<option value="14">14</option>
+				<option value="15">15</option>
+				<option value="16">16</option>
+				<option value="17">17</option>
+				<option value="18">18</option>
+				<option value="19">19</option>
+				<option value="20">20</option>
+				<option value="21">21</option>
+				<option value="22">22</option>
+				<option value="23">23</option>
+				<option value="24">24</option>
+				<option value="25">25</option>
+				<option value="26">26</option>
+				<option value="27">27</option>
+				<option value="28">28</option>
+				<option value="29">29</option>
+				<option value="30">30</option>
+				<option value="31">31</option>
+				<option value="32">32</option>
+				<option value="33">33</option>
+				<option value="34">34</option>
+				<option value="35">35</option>
+				<option value="36">36</option>
+				<option value="37">37</option>
+				<option value="38">38</option>
+				<option value="39">39</option>
+				<option value="40">40</option>
+				<option value="41">41</option>
+				<option value="42">42</option>
+				<option value="43">43</option>
+				<option value="44">44</option>
+				<option value="45">45</option>
+				<option value="46">46</option>
+				<option value="47">47</option>
+				<option value="48">48</option>
+				<option value="49">49</option>
+				<option value="50">50</option>
+				<option value="51">51</option>
+				<option value="52">52</option>
+				<option value="53">53</option>
+				<option value="54">54</option>
+				<option value="55">55</option>
+				<option value="56">56</option>
+				<option value="57">57</option>
+				<option value="58">58</option>
+				<option value="59">59</option>
+				<option value="60">60</option>
+			</select>秒
+			</p>
+		</div>
+	</li>
+	<li>
+		<div class="btnbox" style="padding-left:20px;">
+			<input type="button" value="<%:保存%>" class="btn" id="submit_btn"/>
+			<div class="ps">
+				系统时间通常会自动设置，如果发现系统时间不正确，请手动设置<br />
+				系统时间不正确可能会影响加速服务
+			</div>
+			<img style="display:none;" id="loading2" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器" />
+		</div>
+	</li>
+	</ul>
+	</form>
+</div>
+<script type="text/javascript">
+var h = "<%=h%>";
+var mi = "<%=mi%>";
+var s = "<%=s%>";
+
+$("select[name='h']").val(h);
+$("select[name='mi']").val(mi);
+$("select[name='s']").val(s);
+
+$(function(){
+	
+	$("#submit_btn").click(function(){
+		//这里需要初始化
+		data_callnum = 0;
+		data_error = false;
+		data_info = "";
+		
+		$("#loading2").show();
+		$("#submit_btn").attr("disabled",true);
+		
+		//system/set_systime 
+		var request_date =  $("#form1").serializeArray(); 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "system","set_systime")%>",request_date,function(rsp) 
+		{ 
+		 	if(rsp.code == 0){
+		 		setTimeout("location.reload();",5000);
+		 		window.parent.art.dialog({icon:"succeed",title:false,content:"设置成功!"}).lock().time(4);
+				$("#loading2").hide();
+				$("#submit_btn").attr("disabled",false);
+		 	} else {
+		 		art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+		 		$("#loading2").hide();
+				$("#submit_btn").attr("disabled",false);
+		 	}
+		})
+		
+	});
+
+})
+
+</script>
+</body>
+</html>

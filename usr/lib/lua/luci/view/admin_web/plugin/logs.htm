@@ -1,0 +1,53 @@
+<%
+local type = luci.http.formvalue("type")
+local log_path = ""
+if type == "mentohust" then
+	log_path = "/tmp/mentohust.log"
+elseif type == "x3c" then
+	log_path = "/var/log/x3c8021x.log"
+else 
+	
+end
+
+local c=""
+if nixio.fs.access(log_path) then
+	local io = require "io"
+	local fd = io.open(log_path, "r")
+	while true do
+		local ln = fd:read("*l")
+		if not ln then
+			break
+		else
+			c = c..ln
+		end
+	end
+end
+%>
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+</head>
+<body>
+<div class="title">
+	<h2><%=type%> LOG</i></h2>
+</div>
+<div class="box setup_box">
+	<textarea name="DataFile" id="DataFile" cols="105" rows="30" style="margin-left: 100px;"><%if nixio.fs.access(log_path) then
+	local io = require "io"
+	local fd = io.open(log_path, "r")
+	while true do
+		local ln = fd:read("*l")
+		if not ln then
+			break
+		else
+			luci.http.write(ln.."\n")
+		end
+	end
+end%></textarea>	
+</div>
+</body>
+</html>

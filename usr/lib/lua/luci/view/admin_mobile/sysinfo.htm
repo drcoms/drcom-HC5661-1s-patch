@@ -1,0 +1,321 @@
+<%
+
+	--[[
+		Info	系统状态
+		Author	Wangchao  <wangchao123.com@gmail.com>
+		Copyright	2012
+	]]--
+
+	local board_type = luci.util.get_sys_board()
+	local tw = require "tw"
+	local status = require "luci.tools.status"
+	
+	--网关
+	local defaulgateway = luci.util.get_eth1_gateway()
+	if defaulgateway=="" or defaulgateway == nil then defaulgateway = "无" end
+	local ver  = require "luci.version"
+ 	local wifi_status,wifi_device,wifi_ifname,wifi_ssid,wifi_encryption,wifi_channel,wifi_mode = luci.util.get_wifi_device_status()
+	math.randomseed(os.time())
+	local random = math.random()
+	
+	--是否显示过 密码
+	local showpassword_tag = "0"
+	local showpasswordfile = "/etc/app/showpassword_cache"
+	local fd = io.open(showpasswordfile, "r")
+	local showpassword_ln = fd:read("*l")
+	
+	if showpassword_ln ~= "0" then
+		fd = io.open(showpasswordfile, "w")
+		fd:write(showpassword_tag)
+		fd:close()
+	end
+
+-%>	
+<%+header%>
+<style>
+.datatable{width:100%;margin: 0;padding: 0;border: 1}
+.datatable tr{height:40px;line-height: 40px;
+	border-bottom-style: dotted;
+ }
+.wan_ipv6_li{display: none;}
+.lan_ipv6_li{display:none}
+.t1{width:25%;vertical-align: top}
+#need_upgrade{display: none;}
+</style>
+
+<div data-role="collapsible-set" data-theme="" data-content-theme="">
+	<div data-role="collapsible" data-collapsed="">
+		<h3>  系统信息 </h3>
+		<div data-role="fieldcontain">
+			<fieldset data-role="controlgroup">
+			<table class="datatable">
+			<tr>
+				<td class="t1"><b>系统版本</b></td>
+				<td class="t2"><%=board_type%> - <% luci.http.write(tw.get_version():match("^([^%s]+)")) %>
+				<div id="need_upgrade"><span  style="background-image: url(<%=resource%>/web/images/alert.png);background-repeat:no-repeat; 
+					text-align: left; padding: 5px 5px 5px 33px; background-position: 5px 50%; 
+					background-repeat: no-repeat no-repeat;">有更新,<a href="#" onclick="switch_interface_type('web','<%=luci.dispatcher.build_url("admin_web")%>?act=options&param=system/upgrade&<%=random%>');">现在升级</a></span>
+				</div>					
+				</td>
+			</tr>
+			<tr>
+				<td class="t1"><b>开机时长</b></td>
+				<td><span id="lan_time">获取中...</span></td>
+			</tr>
+			
+			</table>
+			</fieldset>
+		</div>
+	</div>
+</div>
+<div data-role="collapsible-set" data-theme="" data-content-theme="">
+	<div data-role="collapsible" data-collapsed="">
+		<h3> 互联网 </h3>
+		<div data-role="fieldcontain">
+			<fieldset data-role="controlgroup">
+			<table class="datatable">
+			<tr>
+				<td class="t1"><b>IPv4地址</b></td>
+				<td style="height:20px;line-height: 20px"><span id="wan_ip"> 
+					<% if tw.get_wan_ip()=="" or tw.get_wan_ip() == nil  then luci.http.write("未分配") else luci.http.write(tw.get_wan_ip()) end%>
+					</span> / <span id="wan_mask">获取中...</span> 
+					<span id="wan_type"> </span>
+				</td>
+			</tr>
+			<tr class="wan_ipv6_li">
+				<td class="t1"><b>IPv6地址</b></td>
+				<td style="height:20px;line-height: 20px">
+					<span id="wan_ipv6"></span> 
+				</td>
+			</tr>
+			<tr>
+				<td class="t1"><b>MAC地址</b></td>
+				<td><span id="wan_mac">获取中...</span></td>
+			</tr>
+			<tr>
+				<td class="t1"><b>DNS地址</b></td>
+				<td style="height:20px;line-height: 20px">
+				<span id="wan_dns" ><%
+			--DNS
+			local cnt = 1
+			local show_slash
+			
+			if status then
+				if table.getn(status:dns_resolv()) > 0 then
+					for i,user in ipairs(status:dns_resolv()) do
+						show_slash = ""
+						local datatypes = require "luci.cbi.datatypes"	
+						if datatypes.ipaddr(user) then
+							if cnt ~= 1 then show_slash = " / " end
+							%><%=show_slash%><%=user%><%
+							cnt = cnt+1
+						end 
+					end
+				else 
+					luci.http.write("无")
+				end
+			end
+			%></span>
+				</td>
+			</tr>
+			<tr>
+				<td class="t1"><b>网关地址</b></td>
+				<td><span id="wan_gw"><%=defaulgateway%></span></td>
+			</tr>
+			</table>
+			</fieldset>
+		</div>
+	</div>
+</div>
+<div data-role="collapsible-set" data-theme="" data-content-theme="">
+	<div data-role="collapsible" data-collapsed="">
+		<h3>  局域网 </h3>
+		<div data-role="fieldcontain">
+			<fieldset data-role="controlgroup">
+			<table class="datatable">
+			<tr>
+				<td class="t1"><b>IPv4地址</b></td>
+				<td><span id="lan_ipv4">获取中...</span></td>
+			</tr>
+			<tr class="lan_ipv6_li">
+				<td class="t1"><b>IPv6地址</b></td>
+				<td style="height:20px;line-height: 20px"><span id="lan_ipv6">获取中...</span></td>
+			</tr>
+			<tr>
+				<td class="t1"><b>MAC地址</b></td>
+				<td><span id="lan_mac">获取中...</span></td>
+			</tr>
+			</table>
+			</fieldset>
+		</div>
+	</div>
+</div>
+
+<div data-role="collapsible-set" data-theme="" data-content-theme="">
+	<div data-role="collapsible" data-collapsed="">
+		<h3>  无线网络 </h3>
+		<div data-role="fieldcontain">
+			<fieldset data-role="controlgroup">
+			<table class="datatable">
+			<tr>
+				<td class="t1"><b>无线状态</b></td>
+				<td><span id="wifi_status">获取中...</span></td>
+			</tr>
+			<tr class="wifi_other">
+				<td class="t1"><b>网络名称</b></td>
+				<td><span id="wifi_ssid">获取中...</span></td>
+			</tr>
+			<tr class="wifi_other">
+				<td class="t1"><b>安全类型</b></td>
+				<td><span id="wifi_encryption">获取中...</span></td>
+			</tr>
+			<tr class="wifi_other">
+				<td class="t1"><b>无线信道</b></td>
+				<td><span id="wifi_channel">获取中...</span></td>
+			</tr>
+			</table>
+			</fieldset>
+		</div>
+	</div>
+</div>
+<script type="text/javascript">
+
+$(function(){
+	check_upgrade();
+	
+	//network/get_wan_info 
+	var request_date = {}; 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "network","get_wan_info")%>",request_date,function(rsp){
+		if(rsp.code==0){
+			var net_type = rsp.type.toUpperCase();
+			var ipv4 = '';
+			var ipv4_mask = '';
+			var ipv6 = '';
+			var ipv6_mask = '0';
+			var mac = '无';
+			if(rsp.ipv4[0]){
+				ipv4_ip = rsp.ipv4[0].ip;
+				ipv4_mask = rsp.ipv4[0].mask;	
+			}
+			if(rsp.ipv6){
+				for (var i=0;i<rsp.ipv6.length;i++){
+					if(rsp.ipv6[i].type == 'Global'){
+						ipv6_ip = rsp.ipv6[i].ip;
+						ipv6_mask = rsp.ipv6[i].mask;
+					}
+				}
+			}
+			if (rsp.macaddr && rsp.macaddr != ""){mac = (rsp.macaddr.toUpperCase());}else if(rsp.mac && rsp.mac!=''){mac = (rsp.mac.toUpperCase());}
+			update_wan_info(net_type,ipv4,ipv4_mask,ipv6,ipv6_mask,mac);
+		}
+	});
+	function update_wan_info(net_type,ipv4,ipv4_mask,ipv6,ipv6_mask,mac){
+		$("#wan_type").html("("+net_type+")");
+		$("#wan_mask").html(ipv4_mask);
+		$("#wan_mac").html(mac);
+		if(ipv6=='' || ipv6_mask=='0'){
+			$(".wan_ipv6_li").hide();
+		}else{
+			$(".wan_ipv6_li").show();
+			$("#wan_ipv6").html(ipv6 + " / " + ipv6_hex2mask(ipv6_mask));
+		}
+	}
+	
+	//network/get_lan_info 
+	var request_date = {}; 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "network","get_lan_info")%>",request_date,function(rsp) 
+	{ 
+		if(rsp.code == 0){
+			
+			$("#lan_ipv4").html(rsp.ipv4[0].ip+" / "+rsp.ipv4[0].mask);
+			if(rsp.ipv6 && rsp.ipv6[0]){
+				$(".lan_ipv6_li").show();
+				$("#lan_ipv6").html(rsp.ipv6[0].ip+" / "+ipv6_hex2mask(rsp.ipv6[0].mask));//rsp.ipv6[0].mask	
+			}
+			$("#lan_mac").html(rsp.mac + "(保修专用)");
+			$("#lan_time").html(millisecondToDate(rsp.uptime));
+		}
+	})
+	
+	//wifi/view_detail 
+	//取最后一个
+	var wifi_status = '<%=wifi_status%>';
+	var wifi_ssid = '<%=wifi_ssid%>';
+	var wifi_device = '<%=wifi_device%>';
+	var wifi_encryption	= '<%=wifi_encryption%>';
+	var wifi_channel = '<%=wifi_channel%>';
+	if(wifi_status=='1'){
+		$("#wifi_status").html("工作中");
+		$("#wifi_ssid").html(wifi_ssid);
+		
+		var html = "";
+		if(wifi_encryption==''||wifi_encryption=='none'){
+			$("#wifi_encryption").html("无加密");
+		}else if(wifi_encryption == "mixed-psk+aes" || wifi_encryption == "mixed-psk"){
+			$("#wifi_encryption").html("强加密(WPA/WPA2个人版)");
+		}
+		if(wifi_channel=='0'){
+			//wifi/get_channel 
+			var request_date = {"device":wifi_device}; 
+			$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_channel")%>",request_date,function(rsp) 
+			{ 
+				if (rsp.channel){
+					if(rsp.channel == "" || rsp.channel == "0"){
+						$("#wifi_channel").html(rsp.channel_autoreal+"（自动选择）");
+					} else {
+						$("#wifi_channel").html(rsp.channel+"（手动选择）");
+					}
+				}else{
+					$("#wifi_channel").html("获取失败");
+				}
+			});
+		}else{
+			$("#wifi_channel").html(""+wifi_channel+"（手动选择）");
+		}
+	}else{
+		$("#wifi_status").html("<span style='color:red'>已关闭</span>");
+		$(".wifi_other").hide();
+	}
+	
+	
+	function millisecondToHour(time){
+		return parseInt(time / 3600.0) + i18_hour + parseInt((parseFloat(time / 3600.0) -
+					parseInt(time / 3600.0)) * 60) + i18_minute +
+					parseInt((parseFloat((parseFloat(time / 3600.0) - parseInt(time / 3600.0)) * 60) -
+					parseInt((parseFloat(time / 3600.0) - parseInt(time / 3600.0)) * 60)) * 60) + i18_second;
+	}
+	function millisecondToDate(msd) {
+			var time = parseFloat(msd);
+			if (time != null && time != "") {
+				if (time > 60 && time < 60 * 60) {
+					time = parseInt(time / 60.0) + i18_minute + parseInt((parseFloat(time / 60.0) -
+						parseInt(time / 60.0)) * 60) + i18_second;
+				}
+				else if (time >= 60 * 60 && time < 60 * 60 * 24) {
+					time = millisecondToHour(time);
+				}else if (time >= 24* 60 * 60 ) {
+					var day = parseInt(time  / (3600.0 * 24) );
+					time = time - (day * 3600 * 24);
+					time =  day + i18_day + millisecondToHour(time);
+				}
+				else {
+					time = parseInt(time) + i18_second;
+				}
+			}
+			return time;
+	}
+	
+	function check_upgrade(){
+		//system/upgrade_check 
+		var request_date = {}; 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "system","upgrade_check")%>",request_date,function(rsp) 
+		{ 
+			if (rsp.need_upgrade == 1){
+				$("#need_upgrade").show();
+			}
+		})
+	}
+	
+})
+</script>
+<%+footer%>

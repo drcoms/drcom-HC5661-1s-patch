@@ -1,0 +1,169 @@
+<%
+--[[
+	Info	lan 口设置
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local ver  = require "luci.version"
+local adv_menu = luci.util.get_adv_menu()
+local request_uri = luci.http.getenv("REQUEST_URI")
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+
+<style type="text/css">
+	table.zone td.tor{
+		text-align: right;
+		width:120px;
+		line-height:14px;
+	}
+</style>
+<body>
+<div class="title">
+	<h2>高级设置<i>设置路由器安全 , 及其他高级设置</i></h2>
+</div>
+<div class="menu">
+	<% luci.util.output_adv_menu() %>
+</div>
+
+<div class="box setup_box">
+	<form id="form1"> 
+	<ul class="ullist">
+	<li>
+		<div class="memu row">
+			<p><label>IP <%:地址%></label><input type="text" name="ip" id="" class="txt" value=""/></p>
+		</div>
+	</li>
+
+	<li>
+		<div class="btnbox">
+			<input type="hidden" name="old_ip" value="" />
+			<input type="hidden" name="old_mask" value="" />
+			<input type="button" value="<%:保存%>" class="btn" id="submit_btn" disabled="disabled"/>
+			<img style="display:none;" id="loading2" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器" />
+		</div>
+	</li>
+	<li>
+		<div class="memu row">
+			<p></p>
+			<p></p>
+			<p><label>其他高级设置:</label></p>
+			<table width="300" border="0" cellspacing="10" cellpadding="0">
+				<tr>
+					<td><a href="<%=luci.dispatcher.build_url("admin_web","wifi","setup","channel")%>">- 无线穿墙</a></td>
+					<td><a href="javascript:window.parent.open_windows('set_network');">- 外网设置</a></td>
+				</tr>
+				<tr>
+					<td><a href="javascript:window.parent.open_windows('devices');">- 设备限速</a></td>
+					<td><a href="javascript:window.parent.open_windows('set_wifi');">- 无线设置</a></td>
+				</tr>
+				<tr>
+					<td><a href="<%=luci.dispatcher.build_url("admin_web","system","upgrade")%>">- 固件自动升级</a></td>
+					<td><a href="javascript:window.parent.open_windows('set_network');">- 无线中继</a></td>
+				</tr>
+				<tr>
+					<td><a href="javascript:window.parent.open_windows('net_detect');">- 网络诊断</a></td>
+					<td>&nbsp;</td>
+				</tr>
+			</table>
+		</div>
+	</li>
+	</ul>
+	<input type="hidden" name="device" value="<%=wifi_device%>" />
+	</form>
+</div>
+<script type="text/javascript">
+function autoHeight(){  
+    var doc = document,  
+        p = window;  
+    while(p = p.parent){  
+        var frames = p.frames,  
+            frame,  
+            i = 0;  
+        while(frame = frames[i++]){  
+            if(frame.document == doc){  
+                frame.frameElement.style.height = doc.body.scrollHeight;  
+				
+                doc = p.document;  
+                break;  
+            }  
+        }  
+        if(p == top){  
+            break;  
+        }  
+    }  
+}
+$(function(){
+	//autoHeight();
+
+	//$.ajaxSettings.async = false;
+	
+	//network/get_lan_info 
+	if(top.global_lan_ipv4){
+		$("input[name='ip']").val(top.global_lan_ipv4);  
+		$("input[name='old_ip']").val(top.global_lan_ipv4);
+		$("#submit_btn").attr("disabled",false);
+	}else{
+		var request_date = {}; 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "network","get_lan_info")%>",request_date,function(rsp) 
+		{
+			if(rsp.code == 0){
+				//auto fill--  
+				$("input[name='ip']").val(rsp.ipv4[0]['ip']);  
+				$("input[name='old_ip']").val(rsp.ipv4[0]['ip']);
+				$("#submit_btn").attr("disabled",false);
+			}else{
+				art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+			}
+		});	
+	}
+	
+	//提交
+	$("#submit_btn").click(function(){
+		
+		$("#loading2").show();
+		$("#submit_btn").attr("disabled",true);
+		
+		if($("input[name='ip']").val() == $("input[name='old_ip']").val()){	//两个值没有改变
+			$("#loading2").hide();
+			$("#submit_btn").attr("disabled",false);
+			window.parent.art.dialog({icon:"succeed",title:false,content:"IP地址没有改变，请重新设置."}).lock().time(4);
+			//window.parent.art.dialog.list['func_box'].close();
+		} else {
+			//network/set_lan_ip 
+			var request_date = ""; 
+			var request_date = $("#form1").serializeArray(); 
+			
+			$.getJSON("<%=luci.dispatcher.build_url("api", "network","set_lan_ip")%>",request_date,function(rsp) 
+			{ 
+				if(rsp.code == 0){
+					var return_ip = $("input[name='ip']").val();
+					if(top.global_lan_ipv4){
+						top.global_lan_ipv4 = return_ip; 
+					}
+					window.parent.global_dorestart('修改 LAN 口参数成功！重启路由器',return_ip,true); 
+					window.parent.art.dialog.list['func_box'].close();
+				} else {
+					art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+				}
+				
+				$("#loading2").hide();
+				$("#submit_btn").attr("disabled",false);
+			})
+		}
+	})
+})
+
+</script>
+</body>
+</html>

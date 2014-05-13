@@ -1,0 +1,139 @@
+<%
+--[[
+	Info	LCP请求发送间隔 
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local ver  = require "luci.version"
+local wan_typeResp = luci.util.get_wan_contact_info()
+local adv_menu = luci.util.get_adv_menu()
+local request_uri = luci.http.getenv("REQUEST_URI")
+%>
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+
+<style type="text/css">
+	table.zone td.tor{
+		text-align: right;
+		width:120px;
+		line-height:14px;
+	}
+</style>
+<div class="title">
+	<h2>高级设置<i>设置路由器安全 , 及其他高级设置</i></h2>
+</div>
+<div class="menu">
+	<% luci.util.output_adv_menu() %>
+</div>
+<div class="box setup_box">
+	<form id="form1"> 
+	<ul class="ullist">
+	<li>
+		<div class="memu row">
+		<%if "pppoe" ~= wan_typeResp then%>
+		<%end%>
+			<p><label>LCP请求发送间隔 </label><input type="text" name="lcp_failure_threshol" value="" width="50" style="width:50px;margin-left: 130px;" class="txt" autocomplete="off">秒(s) <a href="javascript:void()" id="go_defult">设为默认值</a></p>
+			<div class="ps">
+				(默认值为 0, 表示不发送请求)<br />
+				当前WAN口连接方式不是 "PPPoE" 不能设置此项，你可以  <a href="javascript:void();" onclick="window.parent.open_windows('set_network');">外网设置</a>
+			</div>
+			<br>
+			<p><label>服务名</label><input type="text" name="wan_service" value="" width="150" style="width:150px;margin-left: 130px;" class="txt" autocomplete="off"></p>
+			<p><label>服务器名称</label><input type="text" name="wan_ac" value="" width="150" style="width:150px;margin-left: 130px;" class="txt" autocomplete="off"></p>
+		</div>
+	</li>
+
+	<li>
+		<div class="btnbox" style="padding-left:60px;">
+			<input type="button" value="保存" class="btn" style="margin-left: 30px;" id="submit_btn" disabled="disabled">
+			<img style="display:none;" id="loading2" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器">
+		</div>
+	</li>
+	</ul>
+	</form>
+</div>
+<script type="text/javascript">
+$(function(){
+	//network/get_wan_info 
+	var request_date = {}; 
+	
+	$("#go_defult").click(function(){
+		$("input[name='lcp_failure_threshol']").val(0);
+	})
+	
+	//network/get_ppp_keepalive 
+	var request_date = {}; 
+	var request_date =  $("#form1").serializeArray(); 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "network","get_ppp_keepalive")%>",request_date,function(rsp) 
+	{ 
+		<%if "pppoe" == wan_typeResp then%>
+			//$("#submit_btn").attr("disabled",false);
+		<%end%>
+		$("#submit_btn").attr("disabled",false); // 提交包含server
+		if(rsp.code == 0){
+			$("input[name='lcp_failure_threshol']").val(rsp.lcp_failure_threshol);
+			<%if "pppoe" ~= wan_typeResp then%>
+				$("input[name='lcp_failure_threshol']").attr("disabled",true);
+			<%end%>
+		}
+	})
+	
+	
+	$.getJSON("<%=luci.dispatcher.build_url("api", "network","get_ppp_adv")%>",request_date,function(rsp) 
+	{ 
+		if(rsp.code == 0){
+			$("input[name='wan_service']").val(rsp.wan_service);
+			$("input[name='wan_ac']").val(rsp.wan_ac);
+		}
+	})
+	
+	//提交
+	$("#submit_btn").click(function(){
+
+		$("#loading2").show();
+		$("#submit_btn").attr("disabled",true);
+		
+		//network/set_wan_mtu 
+		var request_date =  $("#form1").serializeArray(); 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "network","set_ppp_keepalive")%>",request_date,function(rsp) 
+		{ 
+			if(rsp.code == 0){
+				
+			} else {
+				<%if "pppoe" == wan_typeResp then%>
+				art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+				<%end%>
+			}
+			
+			$.getJSON("<%=luci.dispatcher.build_url("api", "network","set_ppp_adv")%>",request_date,function(rsp2) 
+			{ 
+				if(rsp2.code == 0){
+					window.parent.art.dialog({icon:"succeed",title:false,content:"修改成功！"}).lock().time(4);
+				} else {
+					art.dialog({icon:"error",title:false,content:rsp2.msg}).lock().time(4);
+				}
+				$("#loading2").hide();
+				$("#submit_btn").attr("disabled",false);
+			})
+			
+			$("#loading2").hide();
+			$("#submit_btn").attr("disabled",false);
+		})
+	})
+	
+})
+
+</script>
+</body>
+</html>

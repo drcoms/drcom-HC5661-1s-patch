@@ -1,0 +1,164 @@
+<%
+--[[
+	Info	MAC 地址绑定
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local remote_addr = luci.http.getenv("REMOTE_ADDR") 
+local mac = string.upper(luci.sys.net.ip4mac(remote_addr) or "")
+local ver  = require "luci.version"
+
+local adv_menu = luci.util.get_adv_menu()
+local request_uri = luci.http.getenv("REQUEST_URI")
+
+local tnetwork = require "luci.model.tnetwork".init()
+local tnetwork_defaults = tnetwork:get_defaults()
+local or_mac = tnetwork_defaults:get("wan_mac")
+
+%>
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+
+<style type="text/css">
+	table.zone td.tor{
+		text-align: right;
+		width:120px;
+		line-height:14px;
+	}
+</style>
+<div class="title">
+	<h2>高级设置<i>设置路由器安全 , 及其他高级设置</i></h2>
+</div>
+<div class="menu">
+	<% luci.util.output_adv_menu() %>
+</div>
+
+<div class="box setup_box">
+	<form id="form1"> 
+	<ul class="ullist">
+	<li>
+		<div class="memu row">
+			<p><label>MAC地址克隆</label>
+			<select name="mac_type" class="txt slt">
+				<option value="default">默认</option>
+				<% if mac ~= "" then%>
+				<option value="ip">复制: <%=mac%> </option>
+				<% end %>
+				<option value="diy">手动</option>
+			</select>
+			</p>
+			<p style="display:none;" id="mac_input_box">
+				<label></label>
+				<input type="text" name="mac" class="txt" value="">
+			</p>
+			
+		</div>
+	</li>
+
+	<li>
+		<div class="btnbox">
+			<input type="hidden" name="old_channel" value="" />
+			<input type="hidden" name="device" value="radio0.network1" />
+			<input type="button" value="<%:保存%>" class="btn" id="submit_btn" disabled="disabled"/>
+			<img style="display:none;" id="loading2" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器" />
+		</div>
+	</li>
+	</ul>
+	</form>
+</div>
+<script type="text/javascript">
+$(function(){
+
+	//network/get_wan_info 
+	var request_date = {}; 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "network","get_wan_info")%>",request_date,function(rsp) 
+	{ 
+		if(rsp.code == 0){
+			if (rsp.macaddr != "" && rsp.macaddr != "<%=or_mac%>"){
+				$("select[name='mac_type']").val("diy");
+				$("input[name='mac']").val(rsp.macaddr.toUpperCase());
+				$("#mac_input_box").show();
+			}
+		} else {
+			art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(1.5);
+		}
+		
+		$("#submit_btn").attr("disabled",false);
+
+	})
+	
+	//$.ajaxSettings.async = false;
+	$("select[name='mac_type']").change(function(){
+		if($(this).val() == "diy"){
+			$("#mac_input_box").show();
+			$("input[name='mac']").val("");
+		} else if ($(this).val() == "ip") {
+			$("#mac_input_box").hide();
+			$("input[name='mac']").val("<%=mac%>");
+		} else if ($(this).val() == "default") {
+			$("#mac_input_box").hide();
+			$("input[name='mac']").val("");
+		}
+	})
+	
+	function check_from(){
+		if ($("select[name='mac_type']").val() == "diy" && $("input[name='mac']").val()==""){
+			art.dialog({icon:"error",title:false,content:"请输入 mac 地址"}).lock().time(1.5);
+			$("#loading2").hide();
+			$("#submit_btn").attr("disabled",false);
+			return false
+		}
+		return true
+	}
+	
+	//network/set_wan_mac 
+	//提交
+	$("#submit_btn").click(function(){
+		
+		var res = check_from();
+		
+		$("#loading2").show();
+		$("#submit_btn").attr("disabled",true);
+		
+		if (res) {
+			var mac = $("input[name='mac']").val().toUpperCase();
+			var request_date = {"mac":mac}; 
+			$.getJSON("<%=luci.dispatcher.build_url("api", "network","set_wan_mac")%>",request_date,function(rsp) 
+			{ 
+
+				if(rsp.code == 0){
+					window.parent.art.dialog({icon:"succeed",title:false,content:"修改成功."}).lock().time(4);
+					//window.parent.art.dialog.list['func_box'].close();
+					if(top.global_wan_mac){
+						if(mac!=''){
+							top.global_wan_mac = mac;
+						}
+					}
+				} else {
+					art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+				}
+				
+				$("#loading2").hide();
+				$("#submit_btn").attr("disabled",false);
+			});
+		}else{
+			$("#loading2").hide();
+			$("#submit_btn").attr("disabled",false);
+		}
+	})
+})
+
+</script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<%
+local ver  = require "luci.version"
+local util  = require "luci.util"
+local deviceReq = "radio0.network1"
+local http = require "luci.http"
+local protocol = require "luci.http.protocol"
+local tw = require "tw"
+local util = require "luci.util"
+
+luci.util.set_agreement_switch("HAVEBEENSET",1)
+
+local ssid_req = protocol.urldecode(luci.http.formvalue("ssid"))
+local net_type = protocol.urldecode(luci.http.formvalue("net_type"))
+local ssid_pass = protocol.urldecode(luci.http.formvalue("ssid_pass"))
+
+local option_type= {
+	{k="pppoe",v="宽带拨号(PPPoE)"},
+	{k="dhcp",v="自动方式 (DHCP)"},
+	{k="static",v="手动方式 (静态IP)"}
+}
+
+
+for i,v in ipairs(option_type) do
+	if v['k']==net_type then 
+		net_type = v['v']
+	end
+end 
+                       	
+%>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<title>极路由－设置成功</title>
+<link rel="shortcut icon" href="/favicon.ico">
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<link rel="stylesheet" href="<%=resource%>/web/css/guide/style.css?v=<%=ver.svnRevNum%>" type="text/css">
+</head>
+<body>
+<div id="wrap">
+	<div id="header">
+	    <h1>一键设置</h1>
+	</div>
+	<div id="main">
+        <div class="slide" id="step3">
+            <h2><span class="ps"></span>设置成功</h2>
+            <div class="content" style="padding-top:0; background:none;">
+                <a href="http://www.hiwifi.com/mobile" id="mobilead" target="_blank">
+                	<img alt="" src="<%=resource%>/web/images/guide/mobile_ad.png" border="0">
+                </a>
+                <%
+					if ssid_req then
+						luci.http.write("<div style='padding:10px;font-size:14px;color:red;text-align:center;'>无线设置成功，无线网重启 ，请重新连接  "..ssid_req.."</div>");
+					end
+					%>
+				<table width="100%" border="0" cellspacing="0" cellpadding="0" class="gist">
+                  <tr>
+                    <th scope="col">连网方式</th>
+                    <th scope="col">无线名称</th>
+                  </tr>
+                  <tr>
+                    <td><%=net_type%></td>
+                    <td><%=ssid_req%></td>
+                  </tr>
+                </table>
+                <p class="controls"><a href="<%=luci.dispatcher.build_url("admin_web","system","guide_online")%>" class="btn" style="padding: 5px 20px;">立刻上网 </a>
+                </p>
+            </div>
+        </div>
+    </div>
+    <div id="footer">
+        <p class="info"><span>系统版本：<% http.write(util.get_sys_board()) %> - <% http.write(tw.get_version():match("^([^%s]+)")) %></span><span>MAC： <%http.write(tw.get_mac())%></span><span>服务热线：40060-24680</span></p>
+        <p class="copyright">&copy 2014 极路由 版权所有</p>
+    </div>
+</div>
+<script type="text/javascript">
+$(function(){
+	<%if ssid_req then%>
+	$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","restart")%>",{},function(rsp) { })
+	<%
+	--luci.sys.call("sleep 3 && env -i /sbin/wifi >/tmp/2")
+	end
+	%>
+})
+</script>
+</body>
+</html>

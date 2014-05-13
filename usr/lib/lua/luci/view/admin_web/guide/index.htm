@@ -1,0 +1,116 @@
+<%
+local url = luci.util.fliter_unsafe(luci.http.urlencode(luci.http.formvalue("url")))
+local accept = luci.http.formvalue("accept")
+local ver  = require "luci.version"
+local util = require "luci.util"
+local http = require "luci.http"
+
+local guide_net = luci.util.exec("cat /tmp/guide_net 2>/dev/null")
+
+local srcurl =  luci.http.formvalue("url");
+if srcurl ~= nil then
+    luci.util.exec("echo -n '"..srcurl.."' >/tmp/firstsrcurl 2>/dev/null")
+end
+
+local tologin = 0
+
+if guide_net == 1 or guide_net == "1" then
+    tologin = 1
+end
+
+if accept == "1" then
+    local file_ok = false
+    
+    local accepted_now = luci.util.get_agreement("ACCEPTED")
+    if accepted_now ~= nil then
+        file_ok = true
+    end
+    
+    if not file_ok then 
+        luci.http.write("没有找到授权配置文件或文件内容错误!")
+        luci.http.close()
+    else 
+        tologin = 1
+    end
+    --luci.http.close()
+end
+
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>极路由｜首次安装</title>
+<link rel="stylesheet" href="<%=resource%>/guide/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script src="<%=resource%>/guide/js/jquery-1.8.2.min.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/custom_checkbox_and_radio.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body id="home">
+	<div id="page">
+		<div id="header">
+			<h1><span id="logo">极路由｜首次安装</span></h1>
+		</div><!-- /header -->
+	   <%
+        if tologin == 0 then
+       %>
+		<div id="content">
+		    <h2 style="color: yellow; font-size: 1.3em;">全球独创宽带密码找回专利</h2>
+			<a id="start_install" href="javascript:void(0);" class="btn radius J_btn">开启神奇之旅</a>
+			<label class="checkbox J_checkbox" for="checkbox">
+		    	<input type="checkbox"  value="" checked="checked" id="checkbox">我同意<a href="<%=luci.dispatcher.build_url("admin_web", "guide", "agreement")%>">用户使用协议</a>
+		    </label>
+		</div><!-- /content -->
+				
+		<div id="footer">
+		</div><!-- /footer -->
+		<script type="text/javascript">
+        if($('.J_checkbox').length){
+            $(".J_checkbox").prepend("<span class='icon'></span><span class='icon-to-fade'></span>");
+            $(".J_checkbox").click(function(){
+                var $this =$(this);
+                setupLabel();
+                if($this.find('input:checked').length){
+                    $('.J_btn').removeClass('disabled');
+                }else{
+                    $('.J_btn').addClass('disabled');
+                }
+            });
+            setupLabel();
+        }
+        </script>
+		<%
+            elseif tologin == 1 then
+        %>
+        <div id="content">
+            <h1 style="color:white">请稍候...<h1>
+        </div>
+        <form id="loginForm" method="post" action="<%=luci.dispatcher.build_url("admin_web", "guide", "internet_check")%>" style="display:none;">
+            <input id="textinput1" name="username" placeholder="" value="admin" readonly="readonly" type="hidden" />
+            <input class="cbi-input" type="password" name="password" id="input_password1" value="<%=luci.version.default_password%>" name="password" id="input_password_login" />
+            <input type="hidden" name="urlback" value="<%=luci.dispatcher.build_url("admin_web", "guide", "internet_check")%>" />
+        </form>
+        <%
+            end
+        %>
+	</div><!-- /page -->
+</body>
+<script type="text/javascript">
+var tologin = '<%=tologin%>';
+$(function(){
+    if(tologin == '1'){
+        $("#loginForm").submit();
+    }else{
+        $("#start_install").click(function(){
+            if($("#checkbox").attr("checked") == "checked"){
+                window.location.href="?url=<%=url%>&accept=1";
+            }
+        })
+        $("#open_agreement").click(function(){
+            $(".needagree").show();
+            $(".no_needagree").hide();
+        })
+    }
+})
+</script>
+</html>

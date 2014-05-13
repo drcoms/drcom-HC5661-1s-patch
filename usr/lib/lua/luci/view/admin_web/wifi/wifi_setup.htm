@@ -1,0 +1,393 @@
+<%
+--[[
+	Info	wifi 基本设置
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local function normalize_mac(mac)
+  return string.lower(string.gsub(mac,"-",":"))
+end
+
+local guide_mode = luci.http.formvalue("guide_mode")
+local remote_addr = luci.http.getenv("REMOTE_ADDR") 
+local mac = luci.sys.net.ip4mac(remote_addr) or ""
+local wifi_status,wifi_device,wlanifname = luci.util.get_wifi_device_status()
+
+local hcwifi = require "hcwifi" 
+local IFNAME = wlanifname --"wlan0" 
+local KEY_STALIST = "stalist" 
+local device_list = {}
+local is_wifi_con 
+local ver  = require "luci.version"
+
+if dev_lins then 
+	local dev_lins = hcwifi.get(IFNAME, KEY_STALIST) 
+	
+	for _, sta in pairs(dev_lins) do 
+		device_list[normalize_mac(sta["macaddr"])] = sta["ccq"]
+	end 
+	
+	-- 本设备是否通过 wifi 连接
+	
+	if device_list[mac] == nil and mac ~= "" then 
+		is_wifi_con = 0
+	else 
+		is_wifi_con = 1
+	end
+end
+%>
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="x-ua-compatible" content="IE=9" />
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/web/js/util.js?v=<%=ver.svnRevNum%>"></script>
+<style type="text/css">
+#hidden_wifi_box{
+	position: absolute;
+	left: 370px;
+	top: 0px;
+	display: no;
+	background-color: #f0f0f0;
+	padding: 5px;
+	margin:0 0 0 5px;
+	display:none;
+}
+</style>
+</head>
+<body>
+<script type="text/javascript">//<![CDATA[
+  	function check_form(obj){
+		return true;
+	}
+	
+//]]></script>
+<div class="title">
+	<h2><%:无线网络设置%><i>移动无线设备接入以下“网络名称”上网 </i></h2>
+</div>
+<div class="content wifi_box">
+	<div class="area">
+		<div class="group">
+			<span style="padding-right:30px;color: #999;">无线网络开关</span><span class="on-off"><button type="button" class="on">开关</button><img style="display:none;" id="loading3" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif"/></span>
+			<p class="item-txt"></p>
+		</div>
+		<div class="group">
+			<form method="post" onsubmit="return check_form(this)" id="form1">
+				<div id="form_box">
+					<div class="form-row"  style="position:relative;">
+						<label class="label">网络名称</label><span><b id="ssidprefix" style="margin-left: 0px;"></b> <input type="text" name="ssid" value="" class="txt-input" autocomplete="off"/></span> 
+						<input type="checkbox" name="hidden" id="hidden_wifi" value="1"> <label for="hidden_wifi">隐藏网络</label>
+						<a href="javascript:void();" id="hidden_wifi">(?)</a>
+						<div id="hidden_wifi_box">
+				   	 		让别人看不到,
+				   	 		只能通过填写SSID连接
+			   	 		</div>
+					</div>
+					<div class="form-row">
+						<label class="label">安全类型</label>
+						<span>
+							<select name="encryption" class="txt-input select">
+								<option value="none"><%:无加密%></option>
+								<option value="mixed-psk">强加密(WPA/WPA2个人版)</option>
+							</select>
+						</span>
+					</div>
+					<div class="form-row" id="password_box" style="display:none;">
+						<label class="label">网络密码</label>
+						<span>
+							<input type="password" autocomplete="off" name="key" id="input_password1" value="<%=wifi_key%>" class="txt-input" />
+							<input type="text" id="input_password2" class="txt-input" name="key_show" style="display:none;" />
+							<input type="hidden" id="password_cache" class="txt-input" name="key_cache" value=""/>
+							<input type="checkbox" id="pwdshow" value="true" class="checkbox" /> <label for="pwdshow"><%:显示%></label>
+						<span>
+					</div>
+					<div class="form-row">
+						<!--  <p class="tips error"><span>这里显示错误提示</span></p> -->
+					</div>
+					<div class="button-row form-button">
+						<input type="button" value="保存 <%if (guide_mode == "1") then%> 并设置下一项 <%end %>" class="btn" id="submit_btn" disabled="disabled" <%if (guide_mode == "1") then%>style="width:180px"<%end%>/>				
+						&nbsp;&nbsp;&nbsp;<input type="button" value="取消" class="btn" id="close_box" />				
+						<img style="display:none;" id="loading2" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif"/>
+					</div>
+			
+					<script type="text/javascript">//<![CDATA[
+					    $(function(){
+					    	$("#pwdshow").click(function(){
+					    		if($(this).attr('checked')){
+					    			$("#input_password2").val($("#input_password1").val());
+					    			$("#input_password1").hide();
+					    			$("#input_password2").show();				
+					    		}else{
+					    			$("#input_password1").val($("#input_password2").val());
+					    			$("#input_password1").show();
+					    			$("#input_password2").hide();
+					    		}
+					    	});
+					    	$("#input_password2").blur(function(){
+					    		$("#input_password1").val($("#input_password2").val());
+					    	});
+					    });
+					//]]></script>
+	
+					<input type="hidden" name="old_ssid" value="" class="wifi_ssid"/>
+					<input type="hidden" name="device" value="" class="device"/>
+					<input type="hidden" name="old_password" value="" class="key"/>
+				</div>
+			</form>
+		</div>
+		<div id="noti_box">
+		</div>
+	</div>
+</div>
+<script type="text/javascript">
+var guide_mode = '<%=guide_mode%>';
+$(function(){
+	
+	$("#hidden_wifi , #hidden_wifi_box").hover(
+			function(){$("#hidden_wifi_box").show();},
+			function(){$("#hidden_wifi_box").hide();}
+	)
+	//$.ajaxSettings.async = false;
+	
+	//wifi/view_detail 
+	//wifi/get_status_list 
+	//var request_date = {}; 
+	//$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_status_list")%>",request_date,function(rsp) {
+		
+	//取最后一个
+	//var dev_index = rsp.device_status.length-1;
+	var last_dev = '<%=wifi_device%>'; //rsp.device_status[dev_index].device;
+	//wifi/view_detail 
+
+	var wifi_status = '<%=wifi_status%>';
+	if(top.global_wifi_status){
+		top.global_wifi_status = wifi_status;  
+	}
+	if(wifi_status=='1'){
+		//开启wifi
+		var request_date = {"device":last_dev};
+		$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","view_detail")%>",request_date,function(rsp) {  
+			if(rsp.code == 0){
+				//wifi 是否开启					
+				$("input[name='ssid']").val(rsp.ssid);
+				$("input[name='old_ssid']").val(rsp.ssid);
+				$("input[name='key']").val(rsp.wifi_key);
+				$("input[name='key_show']").val(rsp.wifi_key);
+				$("input[name='key_cache']").val(rsp.wifi_key);
+
+				$("input[name='old_password']").val(rsp.wifi_key);
+				$("input[name='device']").val(rsp.device);
+				if(rsp.encryption == "mixed-psk+aes" || rsp.encryption == "mixed-psk"){rsp.encryption = "mixed-psk";}
+				$("select[name='encryption']").val(rsp.encryption);
+				$("#ssidprefix").html(rsp.ssidprefix);
+						
+				if (rsp.encryption != "none"){
+					$("#password_box").show();
+				}
+
+				$("#submit_btn").attr("disabled",false);
+						
+				if (rsp.hidden == "enable"){
+					$("input[name='hidden']").attr("checked","checked");
+				}
+						
+				var switch_b = $(".on-off").children("button");
+				switch_b.addClass("on");
+				switch_b.removeClass("off");
+						
+				if (rsp.wifi_key == "" || !rsp.wifi_key){
+					$("#noti_box").before('<div class="group"><p class="tips board alert">无线网络未设置密码，<span style="color:red">有被他人盗用的风险</span>，请设置密码。</p></div>');
+				}
+			}  else {
+				 art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(1.5);
+			}
+		});
+			
+	} else {
+		$("#noti_box").before('<div class="group"><p class="tips board alert">无线网络未启动</p></div>');
+		$("#wifi_ok").hide();
+			
+		var switch_b = $(".on-off").children("button");
+		switch_b.addClass("off");
+		switch_b.removeClass("on");
+			
+		$("#form_box").hide();
+	}
+		
+		//关闭
+		//开关
+	$(".on-off").click(function(){
+		var switch_b = $(this).children("button");
+		var status_now = switch_b.attr("class");
+		if(status_now == "on"){
+			swicth_act("off",last_dev);
+		} else if (status_now == "off"){
+			swicth_act("on",last_dev);
+		}
+	});
+	
+	//自动取消填写密码
+	$("select[name='encryption']").change(function(){
+		if($(this).val() == "none"){
+			var key_cache = $("input[name='key']").val();
+			$("input[name='key_cache']").val(key_cache);
+		 	$("input[name='key']").val("");
+			$("input[name='key_show']").val("");
+			$("#password_box").hide();
+		} else {
+			var key_cache = $("input[name='key_cache']").val();
+			var key = $("input[name='key']").val();
+			if (key != ""){key_cache = key;}
+		 	$("input[name='key']").val(key_cache);
+			$("input[name='key_show']").val(key_cache);
+			$("#password_box").show();
+		}
+	})
+	
+	//开关动作
+	function swicth_act(action,device){
+		var switch_b = $(".on-off").children("button");
+		if(action == "on"){
+			//switch_b.addClass("on");
+			//switch_b.removeClass("off");
+			
+			switch_b.hide();
+			$('#loading3').show();
+			
+			//wifi/shutdown 
+			var request_date = {"device":device}; 
+			$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","reconnect")%>",request_date,function(rsp) 
+			{ 
+				location.reload();
+			})
+
+			
+ 		} else if (action == "off"){
+ 			
+ 			<%if is_wifi_con==1 then%>
+ 				art.dialog({
+				    title: false,
+				    content: '请使用有线连接关闭路由器 WIFI 功能，或使用 <a href="http://www.hiwifi.com/mobile/" target="_blank">HiWiFi 远程控制 App</a>',
+				    icon: 'warning',
+				  
+				    //okVal: "现在关闭", 
+				    cancelVal: "关闭", 
+				    cancel: function(){
+				        this.close();
+				        return false;
+				    }
+				}).lock();
+ 			<%else%>
+	 			art.dialog({
+				    title: false,
+				    content: '是否确定关闭WIFI? <br> (也可以使用 <a href="http://www.hiwifi.com/mobile/" target="_blank">HiWiFi 远程控制 App</a> 进行操作)',
+				    icon: 'warning',
+				    ok: function(){
+				    	this.close();
+				    	//关闭动作
+						switch_b.hide();
+						$('#loading3').show();
+						
+						//wifi/shutdown 
+						var request_date = {"device":device}; 
+						$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","shutdown")%>",request_date,function(rsp) 
+						{ 
+							window.location.reload();
+						})
+				        return false;
+				    },
+				    okVal: "现在关闭", 
+				    cancel: function(){
+				        this.close();
+				        return false;
+				    }
+				}).lock();
+ 			<%end%>
+ 		}
+	}
+	
+	
+	$("#close_box").click(function(){
+		if(guide_mode=='1'){
+			guide_mode_next_step();	
+		}else{
+			window.parent.art.dialog.list['func_box'].close();
+		}
+	})
+	
+	//提交
+	$("#submit_btn").click(function(){
+		var wifi_password = $("input[name='key']").val();
+		if(HaveChineseStr(wifi_password)){
+			art.dialog({icon:"error",title:false,content:"密码只能使用英文符号及数字."}).lock().time(4);
+		} else {
+			$("#loading2").show();
+			$("#submit_btn").attr("disabled",true);
+			$("input,select").attr("readonly",true);
+			
+			var request_date =  $("#form1").serialize();
+			
+			var ssid_new = $('input[name="ssid"]').val();
+			$.ajax({
+			  url: "<%=luci.dispatcher.build_url("api", "wifi","set_base")%>",
+			  dataType: 'json',
+			  timeout: 5000, //3 second timeout
+			  type: "POST",
+			  data: request_date,
+			  success: function(rsp,item) {  
+					if(rsp.code == 0){
+						rsp.msg = HTMLEncode(rsp.msg) ;
+						if(guide_mode!='1'){
+							art.dialog({icon:"succeed",title:false,content:"修改成功 请手动连接 "+rsp.msg}).lock().time(5);
+						}
+					} else {
+						//if(guide_mode!='1'){
+						art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+						//}
+					}
+					$("#loading2").hide();	
+					$("#submit_btn").attr("disabled",false);
+					$("input,select").attr("readonly",false);
+					
+					if(top.global_wifi_ssid){//更新缓存
+						top.global_wifi_ssid = $("input[name='ssid']").val();
+						top.global_wifi_ssid_show = $("input[name='ssid']").val();
+						top.global_wifi_encryption = $("select[name='encryption']").val();
+					}
+					if(rsp.code==0 && guide_mode=='1'){
+						guide_mode_next_step();	
+					}
+				},
+				error: function(x, t, m) {
+					$("#loading2").hide();
+					$("#submit_btn").attr("disabled",false);
+					$("input,select").attr("readonly",false);
+					if(guide_mode == "1"){
+						guide_mode_next_step();	
+					}else{
+						window.parent.art.dialog({icon:"succeed",title:false,content:"成功,请重新连接无线网络 "+ssid_new}).lock().time(5);	
+					}
+					//window.parent.art.dialog.list['func_box'].close();
+				}
+			});
+		}
+	})
+})
+
+//引导模式下一步
+function guide_mode_next_step(){
+	window.parent.guide_step3();
+	window.parent.art.dialog.list['func_box'].close();
+}
+
+</script>
+</body>
+</html>

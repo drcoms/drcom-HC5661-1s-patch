@@ -1,0 +1,306 @@
+<%
+--[[
+	Info	后台登录页
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+	
+	local util = require "luci.util"
+	local http = require "luci.http"
+
+	local urlbackReq = util.fliter_unsafe(http.formvalue("urlback")	)
+	local fromsite = http.formvalue("fromsite")
+	
+	-- clinet_bind = 1 表示手机客户端请求
+	-- clinet_token 为手机客户端 token 存到 "/tmp/"
+	local clinet_bind = http.formvalue("clinet_bind")
+	local clinet_token = http.formvalue("token") or ""
+
+	-- token 写入临时文件
+	clinet_token = util.shell_safe_str(clinet_token)
+	os.execute("echo '"..clinet_token.."' > /tmp/clinet_token")	
+	
+	if urlbackReq == nil or urlbackReq==""  then
+		urlbackReq = http.getenv("HTTP_REFERER")
+	end
+	local tw = require "tw"
+	local ver  = require "luci.version"
+	
+	--是否弹出协议
+	local agreementfile = "/etc/agreement"
+	local rv = { }
+	local nfs = require "nixio.fs"
+	local io = require "io"
+	local fd = io.open(agreementfile, "r")
+	local agree_status
+	
+	if fd then
+		while true do
+			local ln = fd:read("*l")
+			if not ln then
+				break
+			else
+				local name,status = ln:match("^(%S+):(%S+)")
+				if name and status then
+					if name == "ACCEPTED" then
+						agree_status = status
+						break
+					end
+				end
+			end
+		end
+		fd:close()
+	end 
+	
+	if agree_status == "0" then 
+		http.redirect(luci.dispatcher.build_url("admin_web", "system","agreement").."?from=back")
+	end
+	
+	--是否显示初始 密码
+	local showpasswordfile = "/etc/app/showpassword_cache"
+	local fd = io.open(showpasswordfile, "r")
+	local showpassword_ln = fd:read("*l")
+	
+	local loginfail = false
+ 	if fuser then 
+		-- lock 数+1
+		luci.util.up_loginlock()
+		loginfail = true
+	end
+	local is_defult_password = luci.sys.user.checkpasswd("root", "admin")
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<meta http-equiv="pragma" content="no-cache">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="expires" content="Wed, 26 Feb 1997 08:21:57 GMT">
+
+<link rel="apple-touch-icon-precomposed" sizes="57x57" href="<%=resource%>/mobile/image/apple-touch-icon-57n.png" />
+<link rel="apple-touch-icon-precomposed" sizes="72x72" href="<%=resource%>/mobile/image/apple-touch-icon-72n.png" />
+<link rel="apple-touch-icon-precomposed" sizes="114x114" href="<%=resource%>/mobile/image/apple-touch-icon-114n.png" /> 
+<link rel="apple-touch-icon-precomposed" sizes="144x144" href="<%=resource%>/mobile/image/apple-touch-icon-144n.png" />
+<title>DrCOM Router Adminstration</title>
+<style type="text/css">
+a{ behavior:url(<%=resource%>/web/images/blur.htc);} /* 批量去除链接焦点 */
+#weixin_img {position: absolute;margin-top: -138px;margin-left: 280px; display:none; cursor:pointer;}
+</style>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery.cookie.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/interface.js?v=<%=ver.svnRevNum%>"></script>
+<!--[if lt IE 9]>
+<script type="text/JavaScript" src="<%=resource%>/web/js/curvycorners.src.js?v=<%=ver.svnRevNum%>"></script>
+<![endif]-->
+<script src="<%=resource%>/web/js/util.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript">
+//如果是内部页，父级页面刷新,登录
+if(window.top!=this){ 
+	 parent.location.reload();
+}
+<%
+if clinet_bind == "1" or clinet_bind == 1 then
+%>
+switch_interface_type('mobile','<%=luci.dispatcher.build_url("admin_mobile")%>?clinet_bind=1');
+<%
+end
+%>
+</script>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<link rel="stylesheet" href="<%=resource%>/web/css/retina.css?v=<%=ver.svnRevNum%>" type="text/css" media="only screen and (-webkit-min-device-pixel-ratio: 2), only screen and (min-device-pixel-ratio: 2)" />
+<%
+http.write(util.inc_html_header_end())
+%>
+</head>
+<body id="login">
+<div id="loginbox" style="position:relative;">
+	<form id="loginform" name="loginform" method="post" action="<%=pcdata(http.getenv("REQUEST_URI"))%>" onsubmit="return check_form(this);"> 
+	<% if not luci.util.is_loginlock() then %>
+		<input autocomplete="off"  type="hidden" name="username" value="admin" />
+		<label>路由器密码</label><input autocomplete="off" class="txt <%- if fuser then %> error<% end -%>" type="<% if showpassword_ln ~= '0' then %>text<% else %>password<% end %>" name="password" id="input_password1" <% if showpassword_ln ~= '0' then %>value="<%=luci.version.default_password%>"<% end %>/>
+		<input type="submit" id="submit_btn" value="登录" class="btn" />
+		<img style="display:none;position:absolute; padding-top: 10px;" id="loading2" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif"/>
+		<br>
+		<%- if loginfail then %>
+		<br>
+		<span style="font-size:12px;color:red;"><%:密码错误！请重试。%> 
+		<% if tonumber(luci.util.get_loginlock()) > 0 then 
+			local resttime = 10 - luci.util.get_loginlock()
+		%>
+			已经错误 <%=luci.util.get_loginlock()%> 次 , 还可以尝试 <%=resttime%> 次
+		<% end %>
+		<% end -%>
+		</span>
+		<% if tonumber(fromsite)== 1 then %>
+		<br>
+		( 成功登录后将自动绑定 )
+		<% end %>
+		<% if showpassword_ln ~= '0' then %>
+			<br>初始密码为  <span style="font-size:16px;color:red;">admin</span>，登录后点击右上  "修改密码"，修改后会使路由器更安全<br>
+		<% else %>
+			<%if is_defult_password then %>
+			<br><img src="<%=resource%>/web/images/alert-icon.png" height="15" /> 密码为 admin, 不安全, 请登录后点击右上  "修改密码"
+			<%end%>
+		<% end %>
+	<% else %>
+		<p class="tips"><%:密码错误！请重试。%> 
+		<% if tonumber(luci.util.get_loginlock()) > 0 then %>
+			<%:密码输入错误次数过多，请拔出电源，5秒后接通。重启路由%>
+		<% end %>
+		</p>
+	<% end %>
+	</form>
+	<div id="weixin_img"><img src="<%=resource%>/web/images/weixin.jpg" /></div>
+</div> 
+<%
+if util.replace_html_footer() then
+http.write(util.replace_html_footer())
+else 
+%>
+<div id="footer">
+</div>
+<%
+end
+%>
+
+<script type="text/javascript">
+	function check_form(obj){
+		
+		if(obj.password.value==""){
+			obj.password.focus();
+			return false;
+		}
+		
+		$(".tips").hide();
+		$("#loading2").show();
+		
+		return true;
+	}
+
+	function preloaderFile(){
+		for(var i=0;i<arguments.length;i++){
+			new Image().src = arguments[i];
+		}
+	}
+
+	$(function(){
+		
+		var sUserAgent = navigator.userAgent.toLowerCase();
+		
+		var bIsIphoneOs = sUserAgent.match(/iphone os/i) == "iphone os";  
+		var bIsAndroid = sUserAgent.match(/android/i) == "android";
+		var bIsWM = sUserAgent.match(/windows mobile/i) == "windows mobile";  
+		
+		if(bIsIphoneOs){$("#iphonenum").html('<a href="callto:4006024680" style="color:#ddd;">40060-24680 <img border="0" src="<%=resource%>/web/images/calling.png"></a>')}
+		if(bIsAndroid){$("#iphonenum").html('<a href="wtai://wp/mc;4006024680" style="color:#ddd;">40060-24680 <img border="0" src="<%=resource%>/web/images/calling.png"></a>')}
+		if(bIsWM){$("#iphonenum").html('<a href="tel:4006024680" style="color:#ddd;">40060-24680 <img border="0" src="<%=resource%>/web/images/calling.png"></a>')}
+		
+		setTimeout(function(){
+
+			document.forms["loginform"].elements["password"].focus();
+
+			preloaderFile("<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin",
+					"<%=resource%>/web/js/util.js?v=<%=ver.svnRevNum%>",
+				    "<%=resource%>/web/js/artDialog/skins/blueskin.css?v=<%=ver.svnRevNum%>",
+				    "<%=resource%>/web/css/retina.css?v=<%=ver.svnRevNum%>",
+					"<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>",
+					"<%=resource%>/web/js/curvycorners.src.js?v=<%=ver.svnRevNum%>",
+					"<%=resource%>/web/js/share_content.js?v=<%=ver.svnRevNum%>",
+					"<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>",
+					
+					"<%=resource%>/web/images/weixin.jpg",
+					
+					"<%=resource%>/web/images/addmac.png",
+					"<%=resource%>/web/images/alert.png",
+					"<%=resource%>/web/images/alert-icon.png",
+					"<%=resource%>/web/images/alert-icon@2x.png",
+					"<%=resource%>/web/images/alert-icon-ie6.png",
+					"<%=resource%>/web/images/alert-icon-retina.png",
+					"<%=resource%>/web/images/background.png",
+					"<%=resource%>/web/images/binded.png",
+					"<%=resource%>/web/images/binded@2x.png",
+					"<%=resource%>/web/images/binded_ie6.png",
+					"<%=resource%>/web/images/blur.htc",
+					"<%=resource%>/web/images/device_icon.png",
+					"<%=resource%>/web/images/device_icon@2x.png",
+					"<%=resource%>/web/images/device_icon_ie6.png",
+					"<%=resource%>/web/images/footer_line.png",
+					"<%=resource%>/web/images/footer_line@2x.png",
+					"<%=resource%>/web/images/header_shadow.png",
+					"<%=resource%>/web/images/header_shadow_ie6.png",
+					"<%=resource%>/web/images/icons-32x32.png",
+					"<%=resource%>/web/images/input_txt_bg.png",
+					"<%=resource%>/web/images/lightning.png",
+					"<%=resource%>/web/images/lightning@2x.png",
+					"<%=resource%>/web/images/login_btn.png",
+					"<%=resource%>/web/images/login_logo_130726.png",
+					"<%=resource%>/web/images/login_logo_130726@2x.png",
+					"<%=resource%>/web/images/loginbox_shadow.png",
+					"<%=resource%>/web/images/logo_130726.png",
+					"<%=resource%>/web/images/logo_130726@2x.png",
+					"<%=resource%>/web/images/logo_grey.png",
+					"<%=resource%>/web/images/nav_pipe.png",
+					"<%=resource%>/web/images/on-off.png",
+					"<%=resource%>/web/images/on-off-ie6.png",
+					"<%=resource%>/web/images/pipe_line.png",
+					"<%=resource%>/web/images/radio-icon.png",
+					"<%=resource%>/web/images/round_buttons_130715.png",
+					"<%=resource%>/web/images/round_buttons_130715@2x.png",
+					"<%=resource%>/web/images/round_buttons_130715_ie6.png",
+					"<%=resource%>/web/images/s1_130715.png",
+					"<%=resource%>/web/images/s1_130715-ie6.png",
+					"<%=resource%>/web/images/s2_130715.png",
+					"<%=resource%>/web/images/s2_130715-ie6.png",
+					"<%=resource%>/web/images/s3_130715.png",
+					"<%=resource%>/web/images/s3_130715-ie6.png",
+					"<%=resource%>/web/images/sd_130715.png",
+					"<%=resource%>/web/images/sd_130715-ie6.png",
+					"<%=resource%>/web/images/cloud_guide.png",
+					"<%=resource%>/web/images/cloud_guide_ie6.png",
+					"<%=resource%>/web/images/info_all.png",
+					"<%=resource%>/web/images/info_all_ie6.png",
+					"<%=resource%>/web/images/signal0.png",
+					"<%=resource%>/web/images/signal1.png",
+					"<%=resource%>/web/images/signal2.png",
+					"<%=resource%>/web/images/signal3.png",
+					"<%=resource%>/web/images/signal4.png",
+					"<%=resource%>/web/images/slash.png",
+					"<%=resource%>/web/images/bg130930@2x.png",
+					"<%=resource%>/web/images/bg130930.png",
+					"<%=resource%>/web/images/sidenav_icons_130715@2x.png",
+					"<%=resource%>/web/images/sidenav_icons_130715.png",
+					"<%=resource%>/web/images/sidenav_icons_130715_ie6.png",
+					"<%=resource%>/web/images/stream.gif",
+					"<%=resource%>/web/images/stream@2x.gif",
+					"<%=resource%>/web/images/tabs_bg.png",
+					"<%=resource%>/web/js/artDialog/skins/icons/succeed.png",
+					"<%=resource%>/web/js/artDialog/skins/icons/warning.png",
+					"<%=resource%>/web/js/artDialog/skins/icons/wait.png",
+					"<%=resource%>/web/js/artDialog/skins/icons/question.png",
+					"<%=resource%>/web/js/artDialog/skins/icons/loading.gif",
+					"<%=resource%>/web/js/artDialog/skins/icons/error.png")
+		},1000);
+		
+	$("#weixin,#weixin_img").hover(
+		function(){
+			$("#weixin_img").show();
+		},function(){
+			$("#weixin_img").hide();
+		}
+	)
+	
+	$("#weixin,#weixin_img").click(function(){
+		if ($("#weixin_img").css("display") == "block"){
+			$("#weixin_img").hide();
+		} else {
+			$("#weixin_img").show();
+		}
+	})
+	});
+</script>
+<%
+http.write(util.inc_html_body_end())
+%>
+</body>
+</html>

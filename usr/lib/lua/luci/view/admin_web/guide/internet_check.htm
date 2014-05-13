@@ -1,0 +1,95 @@
+<%
+local ver  = require "luci.version"
+local s = require "luci.tools.status"
+local util  = require "luci.util"
+local deviceReq = "radio0.network1"
+local http = require "luci.http"
+local protocol = require "luci.http.protocol"
+local tw = require "tw"
+local n = require "luci.controller.api.network"
+local net = require "hiwifi.net"
+
+local autowantypeResp
+local uciwantypeResp
+local is_eth_linkResp
+
+if n.is_bridge() then
+    autowantypeResp = 4
+    uciwantypeResp = "wisp"
+    is_eth_linkResp = net.get_wifi_bridge_connect();
+    is_eth_linkResp = is_eth_linkResp or 0;
+else
+    autowantypeResp = luci.util.get_auto_wan_type_code()
+    local interface = "wan"
+    local resultResp = luci.util.get_lan_wan_info(interface)
+    if resultResp ~= false then
+      uciwantypeResp = luci.util.get_wan_contact_info()
+    end
+    -- Wan 口是否连通
+    is_eth_linkResp = luci.util.is_eth_link();
+end
+
+--是否显示过 密码
+local showpassword_tag = "0"
+local showpasswordfile = "/etc/app/showpassword_cache"
+local fd = io.open(showpasswordfile, "r")
+local showpassword_ln = fd:read("*l")
+
+if showpassword_ln ~= "0" then
+    fd = io.open(showpasswordfile, "w")
+    fd:write(showpassword_tag)
+    fd:close()
+end
+    
+-- 打开一次
+local guide_tag= ver.guide_tag
+local appguidefile = "/etc/app/guide_cache"
+fd = io.open(appguidefile, "w")
+fd:write(guide_tag)
+fd:close()
+
+local guide_net = luci.util.exec("cat /tmp/guide_net 2>/dev/null")
+
+local to_url = '';
+if guide_net == 1 or guide_net == "1" then
+    to_url = luci.dispatcher.build_url("admin_web", "guide", "internet_success")
+else
+    if autowantypeResp == 1 then
+        to_url = luci.dispatcher.build_url("admin_web", "guide", "pppoe").."?autotype=pppoe"
+    elseif autowantypeResp == 2 then
+        to_url = luci.dispatcher.build_url("admin_web", "guide", "dhcp").."?autotype=dhcp"
+    elseif autowantypeResp == 3 then
+        --to_url = luci.dispatcher.build_url("admin_web", "guide", "static").."?autotype=static"
+        to_url = luci.dispatcher.build_url("admin_web", "guide", "pppoe").."?from=static"
+    elseif autowantypeResp == 4 then
+        to_url = luci.dispatcher.build_url("admin_web", "guide", "wisp").."?autotype=wisp"
+    elseif autowantypeResp == 99 then
+        if is_eth_linkResp == 0 or is_eth_linkResp == "0" then
+            to_url = luci.dispatcher.build_url("admin_web", "guide", "unlink")
+        else
+            to_url = luci.dispatcher.build_url("admin_web", "guide", "dhcp")
+        end
+    elseif autowantypeResp == 100 then
+        to_url = luci.dispatcher.build_url("admin_web", "guide", "dhcp")
+    else
+        to_url = luci.dispatcher.build_url("admin_web", "guide", "pppoe")
+    end
+end
+%>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="pragma" content="no-cache">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="expires" content="Wed, 26 Feb 1997 08:21:57 GMT"> 
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=no" /> 
+<title>欢迎使用极路由</title>
+</head>
+<body>
+</body>
+<script language="javascript" type="text/javascript">
+var to_url = '<%=to_url%>';
+window.location.href = to_url;
+</script>
+</html>

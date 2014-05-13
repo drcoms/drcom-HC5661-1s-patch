@@ -1,0 +1,133 @@
+<%
+local url = luci.util.fliter_unsafe(luci.http.urlencode(luci.http.formvalue("url")))
+local accept = luci.http.formvalue("accept")
+local agreementfile = "/etc/agreement"
+local ver  = require "luci.version"
+local util = require "luci.util"
+local http = require "luci.http"
+local tw = require "tw"
+
+--没经过协议页时自动登陆 ()
+local accepted_now = luci.util.get_agreement("ACCEPTED")
+
+if accepted_now == "1" then
+	--TODO: 如果未登录则强制登陆
+end 
+
+if accept == "1" then
+	local rv = { }
+	local nfs = require "nixio.fs"
+	local io = require "io"
+	local fd = io.open(agreementfile, "r")
+	local file_ok = false
+	
+	if fd then
+		while true do
+			local ln = fd:read("*l")
+			if not ln then
+				break
+			else
+				local name,status = ln:match("^(%S+):(%S+)")
+				if name and status then
+					if name == "ACCEPTED" then
+						file_ok = true
+						break
+					end
+				end
+			end
+		end
+		fd:close()
+	end 
+	
+	if not file_ok then 
+		luci.http.write("没有找到授权配置文件或文件内容错误!")
+	else 
+		--接受设为1
+		luci.util.set_agreement_switch("ACCEPTED",1)
+		luci.util.set_agreement_switch("HAVEBEENSET",1)
+		
+		luci.http.redirect(luci.dispatcher.build_url("admin_mobile").."?guide_mode=1")
+		
+		--暂时屏蔽 TODO 向设置页传递url
+		--[[
+		if url == nil or url == "" then
+			luci.http.redirect("/")
+		else
+			local http_t = url:match('^http([^%s]+)')
+			if http_t == nil or http_t == ""  then 
+				url = "http://"..url
+			end
+			luci.http.redirect(luci.http.urldecode(url))
+		end
+		]]--
+	end
+	luci.http.close()
+end
+
+local _,_,_,wifi_ssid = util.get_wifi_device_status()
+
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>欢迎使用极路由</title>
+<link rel="stylesheet" href="<%=resource%>/mobile/css/first.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<style type="text/css">
+.needagree{
+	display:none;
+}
+</style>
+</head>
+<body id="agreement">
+<div id="page">
+	<div id="header">
+	    <p class="no_needagree">已连接 <cite><%=wifi_ssid%></cite> 网络</p>
+		<h1 class="needagree">欢迎使用极路由</h1>
+	</div><!-- /header -->
+	<div id="content">
+	    <a href="#" class="btn big no_needagree" onclick="javascript:window.location.href='?accept=1';">快捷设置上网</a>
+	    <span class="no_needagree">我同意<a href="javascript:void()" id="open_agreement">《极路由上网协议》</a></span>
+		<div class="box needagree">
+			<textarea>北京极科极客科技有限公司（以下简称HiWiFi）提醒您：在使用HiWiFi路由器等相关应用前，请您务必仔细阅读并透彻理解本声明。您可以选择不使用HiWiFi，但如果您使用HiWiFi，您的使用行为将被视为对本声明全部内容的认可。
+			
+       1. 您明确同意，您需独自承担使用许可应用产生的全部风险。
+        	        
+       2. 除法律法规有明确规定外，HIWIFI对许可应用不作任何明示或暗示的保证，包括但不限于许可应用的适用性、没有错误或疏漏、持续性、准确性、可靠性、适用于某一特定用途。同时，HIWIFI也不对许可应用所涉及的技术及信息的有效性、准确性、正确性、可靠性、质量、稳定、完整和及时性作出任何承诺和保证。
+        	        
+       3. HIWIFI不就网络的中断或无法运作、技术故障、计算机错误或病毒、信息损坏或丢失或其它在HIWIFI合理控制范围之外的原因而产生的其他任何性质的破坏而向您或任何第三方承担赔偿责任。
+        	        
+       4. 使用许可应用会受到各个网络环节不稳定因素的影响，包括但不限于因不可抗力、黑客攻击、系统不稳定、您所处位置、您的苹果终端处于关闭状态、信息内容非法以及其他任何网络、技术、通信线路、信息安全管理措施等原因造成许可应用无法正常使用，您同意自行承担以上风险，HIWIFI不承担任何责任。
+        	        
+       5. 在任何情况下，由于您因下述任一情况所引起或与此有关的任何人身伤害或任何附带的、特别的、间接的或后果性的损害赔偿，包括但不限于利润损失、资料损失、业务中断的损害赔偿或任何其它商业损害赔偿或损失，无论因何原因产生，也无论HIWIFI是否知悉该等损失可能发生，HIWIFI均无须为此承担任何责任：
+        	    1)  使用或未能使用许可应用；
+        	    2)  第三方未经批准的使用许可应用或更改您的数据；
+        	    3)  使用许可应用进行的行为产生的费用及损失；
+        	    4)  您对许可应用的误解；
+        	    5)  任何非因HIWIFI的原因而引起的与许可应用有关的其它损失。
+        	        
+       6. 非经HIWIFI或HIWIFI授权开发并正式发布的其它任何由许可应用衍生的应用均属非法，使用此类应用，可能导致不可预知的风险，由此产生的一切法律责任与纠纷与HIWIFI无关，HIWIFI并有权中止、终止使用许可和/或其他一切服务。
+        	        
+       7. 您与其他使用许可应用的用户之间通过许可应用进行时，因您受误导或欺骗而导致或可能导致的任何心理、生理上的伤害以及经济上的损失，应由过错方依法承担所有责任，一概与HIWIFI无关。</textarea>
+      </div>
+      <a href="javascript:void()" class="needagree"><button class="btn" onclick="javascript:window.location.href='?accept=1';">同 意</button></a>
+	</div><!-- /content -->
+			
+	<div id="footer">
+		<h3>&copy 北京极科极客科技有限公司 版权所有</h3>
+	</div><!-- /footer -->
+</div><!-- /page -->
+<script type="text/javascript">
+$(function(){
+	$("#open_agreement").click(function(){
+		$(".needagree").show();
+		$(".no_needagree").hide();
+	})
+})
+</script>
+</body>
+</html>
+</body>
+</html>

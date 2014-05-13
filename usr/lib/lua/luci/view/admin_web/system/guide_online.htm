@@ -1,0 +1,62 @@
+<%
+local ver  = require "luci.version"
+local util  = require "luci.util"
+local deviceReq = "radio0.network1"
+local http = require "luci.http"
+local protocol = require "luci.http.protocol"
+local tw = require "tw"
+local util = require "luci.util"
+
+luci.util.set_agreement_switch("HAVEBEENSET",1)
+%>
+<!DOCTYPE html>
+<html style="height:100%; overflow: hidden;padding-bottom: 81px;">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=yes" /> 
+<title>极路由－设置完成</title>
+<link rel="shortcut icon" href="/favicon.ico">
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<link rel="stylesheet" href="<%=resource%>/web/css/guide/style.css?v=<%=ver.svnRevNum%>" type="text/css">
+<script src="<%=resource%>/web/js/dropdowntabs.js" type="text/javascript" language="javascript"></script>
+</head>
+<body id="toolpage">
+<div id="toolbar">
+    <a href="javascript:void();" id="close">关闭</a>
+    <h1><a href="javascript:void();" class="go_hiwifi" id="logo">极路由</a></h1>
+    <div id="plugins">
+        <ul>
+        	<li><a href="http://www.hiwifi.com/mobile" target="_blank"><span class="icon"></span>下载手机APP</a></li>
+            <li><a href="<%=luci.dispatcher.build_url("admin_web")%>?act=cloud_guide" target="_blank"><span class="icon"></span>智能带宽管理</a></li>
+            <li><a href="<%=luci.dispatcher.build_url("admin_web")%>?act=cloud_guide" target="_blank"><span class="icon"></span>去广告插件</a></li>
+            <li id="more"><a href="<%=luci.dispatcher.build_url("admin_web")%>" rel="morediv" target="_blank"><span class="icon"></span>路由器后台</a></li>
+        </ul>
+    </div>
+    <div id="morediv" style="visibility:hidden;">
+        <ul>
+            <li><a href="<%=luci.dispatcher.build_url("admin_web")%>?act=options&param=wifi/setup/channel" target="_blank">无线穿墙</a></li>
+            <li><a href="<%=luci.dispatcher.build_url("admin_web")%>?act=devices" target="_blank">设备限速</a></li>
+            <li><a href="<%=luci.dispatcher.build_url("admin_web")%>?act=options&param=system/upgrade" target="_blank">固件自动升级</a></li>
+            <li><a href="<%=luci.dispatcher.build_url("admin_web")%>?act=options&param=system/net_detect" target="_blank">网路诊断</a></li>
+        </ul>
+    </div>
+    <script type="text/javascript">
+    //SYNTAX: tabdropdown.init("menu_id", [integer OR "auto"])
+    tabdropdown.init("more", 7)
+    </script>
+    </div>
+</div>
+<iframe name="iframe" src="http://www.hiwifi.com/twxredirect/?type=guide&mac=<%http.write(tw.get_mac())%>" id="viewing" frameborder="0" scrolling="auto" width="100%" height="100%" frameborder=no onload="document.all['iframe'].style.height=makewing.document.body.scrollHeight"></iframe>
+<script type="text/javascript">
+$(function(){
+	$("#close").click(function(){
+		var url = $("#viewing").attr("src");
+		window.location.href=url;
+	})
+	$(".go_hiwifi").click(function(){
+		$("#viewing").attr("src","http://www.hiwifi.com");
+	})
+})
+</script>
+</body>
+</html>

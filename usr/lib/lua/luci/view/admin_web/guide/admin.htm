@@ -1,0 +1,155 @@
+<%
+local ver  = require "luci.version"
+local http = require "luci.http"
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>极路由｜首次安装－修改后台密码</title>
+<link rel="stylesheet" href="<%=resource%>/guide/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script src="<%=resource%>/guide/js/jquery-1.8.2.min.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/custom_checkbox_and_radio.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/web/js/util.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/application.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+	<div id="page">
+		<div id="header">
+			<h1><span id="logo">极路由｜首次安装</span></h1>
+		</div><!-- /header -->
+				
+		<div id="content">
+			<div class="admin">
+				<h2 style="font-size: 1.3em;">设置极路由后台密码</h2>
+				<p style="color: green;">防止DNS劫持，保障网上财产安全</p>
+			    <p style="color: #ccc;">访问http://hiwifi.com 进入路由器后台进行管理</p>
+				<form id="form1">
+					<input type="hidden" class="txt radius" name="old_password" value="admin" />
+					<input type="text" class="txt radius J_pw" maxLength="20" minLength="5" placeholder="密码不少于5位" errorText="密码不能少于5个字符" name="password" />
+					<p class="error"></p>
+					<a id="submit_btn" class="btn radius">保存密码</a>
+				</form>
+				<a id="complete_btn" href="javascript:void();" class="link skip">跳过</a>
+			</div>
+		</div><!-- /content -->
+
+		<div id="footer">
+		</div><!-- /footer -->
+	</div><!-- /page -->
+</body>
+
+<script type="text/javascript">
+var saving = false;
+var ssid_view = '<%=luci.dispatcher.build_url("admin_web", "guide","ssid")%>';
+var timeout = 35000;
+var sec;
+
+$(function(){
+    $("#submit_btn").click(function(){form_submit();});
+    $("#complete_btn").click(function(){
+        complete();
+    });
+    listerenterkeydown(function(){
+        form_submit();
+    });
+});
+
+function listerenterkeydown(down){
+    document.onkeydown = function(e){     
+        var ev = document.all ? window.event : e;
+        if(ev.keyCode==13) {  
+            down();
+        }
+    }
+}
+
+function complete(){
+    window.location = ssid_view;
+}
+
+function form_submit(){
+    $('.J_pw').lengthCheck({'blurCheck':true,'errorClass':'input-error'});
+    if($(".input-error").size() > 0){
+        return;
+    }
+    var password = $("input[name='password']").val();
+    if(HaveChineseStr(password)){
+        $(".error").html('密码只能使用英文符号及数字');
+        return;
+    }
+    if(saving == true){
+        return;
+    }
+    saving = true;
+    $("#submit_btn").html('正在保存中...');
+    $(".error").html('');
+        
+    //system/set_sys_password 
+    var request_date = $("#form1").serialize(); 
+    sec = Math.ceil(timeout/1000);
+    update_btn();
+    
+    $.ajax({
+          url: "<%=luci.dispatcher.build_url("api", "system","set_sys_password")%>",
+          dataType: 'json',
+          timeout: 5000, //5 second timeout
+          type: "POST",
+          data: request_date,
+          success: function(rsp,item){
+              if(rsp.code == 0){
+                set_agreement_done();
+              } else {
+                $(".error").html(rsp.msg);
+                $("#submit_btn").html('保存密码');
+                saving = false;
+              }
+          },
+          error: function(x, t, m) {
+              $(".error").html('保存失败');
+              $("#submit_btn").html('保存密码');
+              saving = false;
+          }
+    }); 
+}
+
+function update_btn(){
+    if(saving == true){
+        if(sec > 0){
+            var mod = sec % 3;
+            if(mod == 0){
+                $("#submit").html("正在保存中...");
+            }else if(mod == 1){
+                $("#submit").html("正在保存中..");
+            }else if(mod == 2){
+                $("#submit").html("正在保存中.");
+            }else{
+                $("#submit").html("正在保存中...");
+            }
+            setTimeout("update_btn()", 1000);
+            sec = sec - 1;
+        }else{
+        	$("#submit").html("保存密码");
+    	}
+    }else{
+        $("#submit").html("保存密码");
+    }
+}
+
+function set_agreement_done(){
+    //system/set_agreement_done 
+    var request_date = {}; 
+    $.getJSON("<%=luci.dispatcher.build_url("api", "system","set_agreement_done")%>",request_date,function(rsp) 
+    {
+       if(rsp && (rsp.code == 0 || rsp.code == "0")){
+         complete();
+       }else{
+        setTimeout("set_agreement_done()", 1000);
+       }
+    }).fail(function(){
+        setTimeout("set_agreement_done()", 1000);
+    })
+}
+</script>
+</html>

@@ -1,0 +1,1190 @@
+<%
+--[[
+	Info	网络诊断页手机版 1.1
+	Author	ChaogangLiu  <chaogang.liu@hiwifi.tw>
+	Copyright	2014
+]]--
+
+local ver  = require "luci.version"
+local return_domain_name
+local return_url_ips
+local urlReq = luci.util.fliter_unsafe(luci.http.formvalue("url"))
+local typeReq = luci.util.fliter_unsafe(luci.http.formvalue("type"))
+local debugReq = luci.util.fliter_unsafe(luci.http.formvalue("debug"))
+if urlReq==nil then
+	urlReq = ""
+end
+local iscont = luci.util.is_internet_connect()
+local wifi_status,wifi_device,wifi_ifname,wifi_ssid,wifi_encryption,wifi_channel,wifi_mode,wifi_ssidprefix = luci.util.get_wifi_device_status()
+local autowantypeResp = luci.util.get_auto_wan_type_code()
+local need_check_channel = true
+if autowantypeResp ~= nil and autowantypeResp == 4 then
+    need_check_channel = false
+end
+%>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=yes">
+    <title></title>
+    <link rel='stylesheet' href='<%=resource%>/mobile/css/net.css?v=<%=ver.svnRevNum%>' type='text/css' media='all' />
+    <script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+<div class="m-main">
+<div class="header">
+    <div class="logo"></div>
+    <div class="right">
+        <a href="http://www.hiwifi.com" target="_blank" class="btn">了解极路由</a>
+        <a href="/cgi-bin/turbo/admin_mobile" target="_blank" class="btn">极路由后台</a>
+    </div>
+</div>
+    <p id="success-box-title" class="success-tip">正在诊断 请稍候...</p>
+    <div class="item">
+        <div class="pic web">
+            <div class="text item4">
+            </div>
+        </div>
+        <div class="item">
+            <div id="pop-state3" class="arrow arrow-b">
+                <div class="errordiv error-box right success-box" style="display: none;">
+                    <div class="icodiv"></div>
+                    <p class="info"></p>
+                </div>
+            </div>
+        </div>
+        <div class="pic ser">
+            <div class="text">宽带运营商</div>
+        </div>
+        <div class="item">
+            <div id="pop-state2" class="arrow arrow-b">
+                <div class="errordiv error-box left success-box">
+                    <div class="icodiv"></div>
+                    <p class="info"></p>
+                </div>
+            </div>
+        </div>
+        <div class="pic ly">
+            <div class="text">极路由</div>
+        </div>
+        <div class="item">
+            <div class="arrow-pc-box">
+                <div id="pop-state4" class="down arrow-pc arrow-pc-b-b">
+                    <div class="errordiv error-box left success-box">
+                        <div class="icodiv"></div>
+                        <p class="info"></p>
+                    </div>
+                </div>
+                <div id="pop-state1" class="top arrow-pc arrow-pc-b-t">
+                    <div class="errordiv error-box right success-box">
+                        <div class="icodiv"></div>
+                        <p class="info"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="mydevpic" class="pic pc">
+            <div id="mydevname" class="text"></div>
+        </div>
+    </div>
+    
+    
+    <p id="url_box_url" class="center"></p>
+    <div class="btn-box btn-bar" style="display: none">
+        <a href="<%=luci.dispatcher.build_url("admin_mobile", "net_detect_1")%>?url=<%=urlReq%>" class="btn">重新诊断</a>
+    </div>
+    
+    <div id="temp_test_msg_div">
+    </div>
+    <img id="test_host_img" style="display:none"/>
+</div>
+</body>
+<script type="text/javascript">
+var debug = "<%=debugReq%>";
+var set_net_url = "<%=luci.dispatcher.build_url("admin_web")%>?act=set_network";
+var net_setup_url = "<a href="+set_net_url+" target='_blank'>设置外网</a>";
+
+var set_wifi_channel_url = "<%=luci.dispatcher.build_url("admin_web")%>?act=wifi_channel";
+var wifi_channel_url = "<a href='"+set_wifi_channel_url+"' target='_blank'>设置穿墙模式</a>";
+var wifi_channel_line_url = "<a href='"+set_wifi_channel_url+"' target='_blank'>WiFi信道</a>";
+var set_wifi_txpwr_url = "<a href='"+set_wifi_channel_url+"' target='_blank'>信号强度</a>";
+
+var dev_list_url = "<%=luci.dispatcher.build_url("admin_web")%>?act=devices";
+var dev_list = "<a href='"+dev_list_url+"' target='_blank'>设备管理</a>";
+
+var is_eth_link_s = new Array(); 
+is_eth_link_s[1] = "已连接";
+is_eth_link_s[0] = "<span class='err'>未连接</span>";
+
+var uciwantype_s = new Array(); 
+uciwantype_s['pppoe'] = "PPPoE";
+uciwantype_s['dhcp'] = "DHCP";
+uciwantype_s['static'] = "静态IP";
+uciwantype_s['wisp'] = "无线中继";
+
+var autowantype_s = new Array(); 
+autowantype_s[1] = "PPPoE";
+autowantype_s[2] = "DHCP";
+autowantype_s[3] = "静态IP";
+autowantype_s[4] = "无线中继";
+autowantype_s[99] = "<span class='err'>未插网线</span>";
+autowantype_s[100] = "未插网线 (无线中继 无需连接)";
+
+var unlinkerr_s = new Array();
+unlinkerr_s['pppoe'] = "请检查网线是否插好";
+unlinkerr_s['dhcp'] = "请检查网线是否插好";
+unlinkerr_s['static'] = "请检查网线是否插好";
+unlinkerr_s['wisp'] = "请检查无线中继的网络是否存在，密码是否正确";
+
+var error_list = new Array;
+error_list['0'] = "正常";
+error_list['-1'] = "正在拨号，请稍后重试";
+error_list['646'] = "此时不允许该帐户登录，请联系宽带运营商";
+error_list['647'] = "您的拨号账户已被禁止，请联系宽带运营商";
+error_list['648'] = "您的账户或密码已过期，请联系宽带运营商";
+error_list['649'] = "您的账户可能被限制，请联系宽带运营商";
+error_list['678'] = "运营商服务器未响应，请重试！";
+error_list['691'] = "帐号密码错误或欠费！";
+error_list['709'] = "更改域上的密码时发生错误。密码可能太短或者可能与以前使用的密码匹配。";
+
+var url_s = new Array();
+url_s['baidu'] = "baidu.com";
+//url_s['hiwifi_app'] = "app.hiwifi.com";
+url_s['qq'] = "qq.com";
+
+var check_website_url_s = new Array();
+check_website_url_s[0] = 'www.qq.com';
+check_website_url_s[1] = 'www.baidu.com';
+//check_website_url_s[2] = 'app.hiwifi.com';
+
+var txpwr_s = new Array();
+txpwr_s['max']='强';
+txpwr_s['mid']='中';
+txpwr_s['min']='弱';
+txpwr_s['140']='穿墙模式';
+
+var state_result_s = new Array();
+
+var check_website_url_result_s = new Array();
+var hiwifi_dev_result_s = new Array();
+var back_url;
+var mac_local;
+var hiwifi_ipv4;
+//是否需要检测信道
+var need_check_channel = '<%=need_check_channel%>';
+var wifi_status = '<%=wifi_status%>';
+var wifi_channel = '<%=wifi_channel%>';
+var limit_down_speed = 500;
+var remote_addr;
+
+<% if iscont then %>
+var iscont = 1;
+<% else %>
+var iscont = 0;
+<% end %>
+init_mac_local();
+init_back_url();
+update_dev_type_view();
+test_start();
+
+function test_start(){
+    check_website();
+    update_hiwifi_icp_show();
+    update_dev_hiwifi_view();
+    update_hiwifi_dev_view();
+}
+
+function init_back_url(){
+    back_url = '<%=urlReq%>';
+    if(typeof(back_url) != "undefined"){
+        if(back_url.indexOf('://')==-1){
+            back_url = "http://"+back_url;
+        }
+    }
+}
+
+function init_mac_local(){
+    <%
+    local remote_addr = luci.http.getenv("REMOTE_ADDR") 
+    local mac = luci.sys.net.ip4mac(remote_addr) or ""
+    %>
+    remote_addr = '<%=remote_addr%>';
+    mac_local = "<%=mac%>".toUpperCase();
+}
+
+function check_ip(obj){
+    //ip地址
+    var exp=/^(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])\.(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])\.(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])\.(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])$/;
+    var reg = obj.match(exp);
+    if(reg==null){
+        return false;
+    }else{
+        return true;
+    }
+}
+
+
+function is_link_success(state){
+  return state == 1 || state == '1';
+}
+
+function set_line_class(line_id, class_name){
+    $("#"+line_id).removeClass("normal-left normal-right error-left error-right success-left success-right");
+    $("#"+line_id).addClass(class_name);
+}
+
+
+function update_info_box_show(class_name, pass){
+    state_result_s.push(pass);
+    if(state_result_s.length < 4){
+        $(".checking-box").show();
+        //$(".success-box").hide();
+        $(".btn-bar").hide();
+    }else{
+        var has_error = false;
+        $.each(state_result_s, function( index, value ) {
+            if(value != true){
+              has_error = true;
+            }
+        });
+        $(".checking-box").hide();
+        //$(".success-box").show();
+        $(".btn-bar").show();
+        $("#success-box-title").removeClass("success");
+        $("#success-box-title").html("");
+        if(!has_error){
+            $("#success-box-title").addClass("success");
+            $("#success-box-title").html("网络连接正常 您可以上网冲浪");
+        }
+        if(typeof(back_url) != "undefined" && back_url!="" && back_url != "http://"){
+            var url = back_url;
+            $("#url_box_url").html("<p>您之前访问的网页是：<a target='_blank' href='"+url+"'>"+url+"</a> <a target='_blank' class='continue_a' href='"+url+"'>继续访问</a></p>");
+        }
+    }
+}
+
+function popstate_old(pop_id, type){
+  $('#'+pop_id).removeClass("yellow red");
+  if(type == 'SUCCESS'){
+    $('#'+pop_id).hide();
+  }else if(type == 'NORMAL'){
+    $('#'+pop_id).addClass("yellow");
+    $('#'+pop_id).show();
+  }else{
+    $('#'+pop_id).addClass("red");
+    $('#'+pop_id).show();
+  }
+}
+
+function popstate(pop_id, type){
+  var pop_id_str = '#'+pop_id;
+  if($(pop_id_str).hasClass('arrow-pc')){
+    if($(pop_id_str).hasClass("down")){
+      $(pop_id_str).removeClass("arrow-pc-b-b arrow-pc-r-b arrow-pc-g-b");
+      $(pop_id_str+" .errordiv").removeClass("success-box");
+      if(type == 'SUCCESS'){
+        $(pop_id_str+" .errordiv").addClass("success-box");
+        $(pop_id_str+" .icodiv").addClass("ico ico-success");
+        $(pop_id_str).addClass("arrow-pc-g-b");
+      }else if(type == 'NORMAL'){
+        $(pop_id_str+" .icodiv").addClass("ico ico-weak");
+        $(pop_id_str).addClass("arrow-pc-r-b");
+      }else{
+        $(pop_id_str+" .icodiv").addClass("ico ico-error");
+        $(pop_id_str).addClass("arrow-pc-r-b");
+      }
+    }
+    if($(pop_id_str).hasClass("top")){
+      $(pop_id_str).removeClass("arrow-pc-b-t arrow-pc-r-t arrow-pc-g-t");
+      $(pop_id_str+" .errordiv").removeClass("success-box");
+      if(type == 'SUCCESS'){
+        $(pop_id_str+" .errordiv").addClass("success-box");
+        $(pop_id_str+" .icodiv").addClass("ico ico-success");
+        $(pop_id_str).addClass("arrow-pc-g-t");
+      }else if(type == 'NORMAL'){
+        $(pop_id_str+" .icodiv").addClass("ico ico-weak");
+        $(pop_id_str).addClass("arrow-pc-r-t");
+      }else{
+        $(pop_id_str+" .icodiv").addClass("ico ico-error");
+        $(pop_id_str).addClass("arrow-pc-r-t");
+      }
+    }
+  }else{
+      $(pop_id_str).removeClass("arrow-g arrow-r arrow-b");
+      $(pop_id_str+" .icodiv").removeClass("ico ico-success ico-error ico-weak");
+      $(pop_id_str+" .errordiv").removeClass("success-box");
+      if(type == 'SUCCESS'){
+        $(pop_id_str+" .errordiv").addClass("success-box");
+        $(pop_id_str+" .icodiv").addClass("ico ico-success");
+        $(pop_id_str).addClass("arrow-g");
+      }else if(type == 'NORMAL'){
+        $(pop_id_str+" .icodiv").addClass("ico ico-weak");
+        $(pop_id_str).addClass("arrow-b");
+      }else{
+        $(pop_id_str+" .icodiv").addClass("ico ico-error");
+        $(pop_id_str).addClass("arrow-r");
+      }
+  }
+}
+
+function pop_title_info(pop_id, title, info){
+    $('#'+pop_id+" .title").html(title);
+    $('#'+pop_id+" .info").html(info);
+    //html = "<div class=\"ico ico-success\"></div>";
+    //html = "<div class=\"ico ico-weak\"></div>";
+    //html = "<div class=\"ico ico-error\"></div>";
+}
+
+function update_pop(pop_id, pop_state, pop_title, pop_info){
+    popstate(pop_id, pop_state);
+    pop_title_info(pop_id, pop_title, pop_info);
+}
+
+function replacelastchar(msg, from, to){
+    if(type_defined(msg) && msg.length > 1 && msg.charAt(msg.length - 1) == from){
+        return msg.substring(0, msg.length - 1) + to;
+    }else{
+        return msg;
+    }
+}
+
+function update_hiwifi_dev_alert(){
+    if(hiwifi_dev_result_s.length == 2){
+        var test_size = hiwifi_dev_result_s.length;
+        var error = 0;
+        var normal = 0;
+        var success = 0;
+        var msg = '';
+        $.each(hiwifi_dev_result_s, function(index, value ) {
+            if(value.rst == 'ERROR'){
+                error++;
+            }else if(value.rst == 'NORMAL'){
+                normal++;
+            }else if(value.rst == 'SUCCESS'){
+                success++;
+            }
+            if(typeof(value.msg) != "undefined" && value.msg.length > 0){
+                msg += value.msg + '；';
+            }
+        });
+        msg = replacelastchar(msg, '；', "。");
+        
+        var success_pencent = success / test_size;
+        var line_class = '';
+        var pop_state_value = '';
+        var state_result = false;
+        var pop_title = '';
+        var pop_info = '';
+        if(success_pencent == 1 || success_pencent == '1'){
+            line_class = "success-left";
+            state_result = true;
+            pop_state_value = 'SUCCESS';
+        }else if(success_pencent == 0 || success_pencent == '0'){
+            line_class = "error-right";
+            pop_state_value = 'ERROR';
+            state_result = false;
+            pop_title = '';
+            pop_info = msg;
+        }else{
+            line_class = "error-right";
+            pop_state_value = 'NORMAL';
+            state_result = false;
+            pop_title = '';
+            pop_info = msg;
+        }
+        set_line_class('hiwifi-me', line_class);
+        update_pop('pop-state4', pop_state_value, pop_title, pop_info);
+        update_info_box_show('pop-state4', state_result);
+    }
+}
+
+// 极路由到设备
+function update_hiwifi_dev_view(){
+    test_txpwr();
+    channel_get_then_check();
+}
+
+//1.2
+function test_txpwr(){
+    //wifi/get_txpwr 
+    var request_data = {"device":"radio0.network1"}; 
+    $.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_txpwr")%>",request_data,function(rsp) 
+    {
+        var rst = 'ERROR';
+        var msg = '';
+        if(rsp.code == 0){
+            if(type_defined(txpwr_s[rsp.txpwr])){
+                if(rsp.txpwr == 'min' || rsp.txpwr == 'mid'){
+                    rst = 'NORMAL';
+                    msg = '信号强度为'+txpwr_s[rsp.txpwr]+'，建议调整'+set_wifi_txpwr_url;
+                }else{
+                    rst = 'SUCCESS';
+                }
+            }else{
+                rst = 'NORMAL';
+                msg = '信号强度有误，请重试';
+            }
+        }else{
+            rst = 'ERROR';
+        }
+        hiwifi_dev_result_s.push({'item':'txpwr','rst':rst, 'msg':msg});
+        update_hiwifi_dev_alert();
+        add_temp_test_msg_line("1.2 信号强度 " + JSON.stringify(rsp));
+    })
+    .fail(function(rsp){
+        var rst = 'ERROR';
+        var msg = '检测信号强度错误，请重试';
+        hiwifi_dev_result_s.push({'item':'txpwr','rst':rst, 'msg':msg});
+        update_hiwifi_dev_alert();
+        add_temp_test_msg_line("1.2 信号强度 " + JSON.stringify(rsp));
+    });
+}
+
+function type_defined(obj){
+    return typeof(obj) != "undefined";
+}
+
+//1.3
+function channel_get_then_check(){
+    if(wifi_status == '0'){
+        hiwifi_dev_result_s.push({'item':'channel','rst':'NORMAL', 'msg':'无线网络被关闭'});
+        update_hiwifi_dev_alert();
+        return;
+    }
+    if(!type_defined(need_check_channel)){
+        setTimeout("channel_get_then_check()", 1000);
+        return;
+    }else if(need_check_channel == false){
+        hiwifi_dev_result_s.push({'item':'channel','rst':'SUCCESS', 'msg':''});
+        update_hiwifi_dev_alert();
+        return;
+    }
+    if(!type_defined(wifi_channel)){
+        return;
+    }
+    if(wifi_channel > 0){
+        check_channel(wifi_channel);
+    }else{
+        //wifi/get_channel 
+        var request_date = {"device":"radio0.network1"}; 
+        $.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_channel")%>",request_date,function(rsp) 
+        {
+            if(rsp.code == 0){ 
+                //auto fill--  
+                var channel_real = rsp.channel;
+                if(rsp.channel == "" || rsp.channel == "0"){
+                    channel_real = rsp.channel_autoreal;
+                }
+                check_channel(channel_real);
+            }else{
+                
+            }
+            add_temp_test_msg_line("1.3 信道使用情况 " + JSON.stringify(rsp));
+        })
+        .fail(function(rsp){
+            var rst = 'ERROR';
+            var msg = '信道情况检测不正常，请重试';
+            hiwifi_dev_result_s.push({'item':'channel','rst':rst, 'msg':msg});
+            update_hiwifi_dev_alert();
+            add_temp_test_msg_line("1.3 信道使用情况 " + JSON.stringify(rsp));
+        });
+    }
+}
+
+function is_channel_rank(ranks, index){
+    var is_rank = false;
+    try{
+        if(type_defined(ranks) && type_defined(ranks[index]) && ranks[index] >= 0 && ranks[index] <= 1){
+            is_rank = true;
+        }
+    }catch(e){
+    }
+    return is_rank;
+}
+
+function check_channel(now_channel){
+    //wifi/get_channel 
+    var request_date = {}; 
+    $.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_channel_rank")%>",request_date,function(rsp) 
+    {
+        var rst = 'ERROR';
+        var msg = '';
+        if(rsp.code == 0){
+            if(typeof(rsp.rank) != "undefined"){
+                var channel_index = now_channel - 1;
+                if(is_channel_rank(rsp.rank, channel_index)){
+                    if(rsp.rank[channel_index] <= 0.5){
+                        rst = 'SUCCESS';
+                    }else{
+                        var recommend_channel = '0';
+                        var recommend_channel_rank = '1';
+                        $.each(rsp.rank, function( index, value ) {
+                            if(index < 11){
+                                if(recommend_channel_rank > value){
+                                   recommend_channel_rank = value;
+                                   recommend_channel = index + 1;
+                                }
+                            }
+                        });
+                        rst = 'NORMAL';
+                        msg = '推荐'+wifi_channel_line_url+recommend_channel;
+                    }
+                }else{
+                   rst = 'NORMAL'; 
+                   msg = '信道情况检测不正常，请重试';
+                }
+            }
+        }else{
+        }
+        hiwifi_dev_result_s.push({'item':'channel','rst':rst, 'msg':msg});
+        update_hiwifi_dev_alert();
+        add_temp_test_msg_line("1.3 信道使用情况 " + JSON.stringify(rsp));
+    })
+    .fail(function(rsp){
+        var rst = 'ERROR';
+        var msg = '信道使用情况检测不正常，请重试';
+        hiwifi_dev_result_s.push({'item':'channel','rst':rst, 'msg':msg});
+        update_hiwifi_dev_alert();
+        add_temp_test_msg_line("1.3 信道使用情况 " + JSON.stringify(rsp));
+    });
+}
+
+// 设备到运营商
+function update_hiwifi_icp_show(){
+    $("#hiwifi-icp").removeClass("error success");
+    var request_data = {};
+    if(iscont == 1){
+      request_data = {'dnotcheckwan':1}; 
+    }
+    $.getJSON("<%=luci.dispatcher.build_url("api", "network","net_detect_1")%>", request_data, function(rsp) 
+    {
+       do_detect_show(rsp.is_eth_link, rsp.isconn, rsp.isnetok, rsp.uciwantype, rsp.autowantype, rsp.dns, rsp.peerdns, rsp.max_up, rsp.max_down, rsp.override_dns, rsp.override_dns2);
+        add_temp_test_msg_line("3.1 3.3 3.4 路由器到运营商 "+JSON.stringify(rsp));
+    })
+    .fail(function(rsp){
+        add_temp_test_msg_line("3.1 3.3 3.4 路由器到运营商 "+JSON.stringify(rsp));
+        update_pop('pop-state2', 'ERROR', '通信异常', '');
+        update_info_box_show('pop-state2', false);
+    });
+}
+
+function append_msg(msg, new_msg, link_tag){
+  var link = "";
+  if(link_tag && typeof(link_tag) != "undefined"){
+     link = link_tag;
+  }
+  var a1 = "";
+  var a2 = "";
+  if(msg && typeof(msg) != "undefined" && msg.length > 0){
+    a1 = msg;
+  }
+  if(new_msg && typeof(new_msg) != "undefined" && new_msg.length > 0){
+    a2 = new_msg;
+  }
+  if(a1 == "" || a2 == ""){
+    return a1 + a2;
+  }
+  return a1 + link + a2;
+}
+
+function not_conn_msg(uciwantype){
+    var msg = "网络不通，请检查" + net_setup_url;
+    if(!type_defined(uciwantype_s[uciwantype])){
+        return '未知联网方式';
+    }
+    if(uciwantype == 'dhcp'){
+    
+    }else if(uciwantype == 'static'){
+    
+    }else if(uciwantype == 'wisp'){
+        msg = "您所中继的账号或密码错误，请检查<a href='"+set_net_url+"' target='_blank'>联网设置</a>";
+    }
+    return msg;
+}
+
+// todo Test why wisp is not connect
+function test_wisp(){
+    
+}
+
+function do_detect_show(is_eth_link, isconn, isnetok, uciwantype, autowantype, dns, peerdns, max_up, max_down, override_dns, override_dns2){
+    var error_title = '';
+    var error_info = '';
+    var has_error = false;
+    var dns_buf = '';
+    var link_buf = '';
+    var peerdns_buf = '';
+    var up_down_buf = '';
+    var err_count = 0;
+    var link = false;
+    var eth_link_buf = '';
+    
+    if(is_link_success(is_eth_link)){
+        if(isconn == 1 || isconn == '1'){
+            if(isnetok == true || isnetok == 'true' || isnetok == 1 || isnetok == '1'){
+                link = true;
+            }else{
+                link = false;
+                link_buf = "极路由网络连接正常，请检查所接入网络是否畅通。";
+                err_count ++;
+            }
+        }else{
+            if(uciwantype == 'pppoe'){
+                //error_title = '拨号问题';
+                update_ppp_status_view();
+            }else{
+                link_buf = not_conn_msg(uciwantype);
+            }
+            err_count ++;
+        }
+    }else{
+        eth_link_buf = unlinkerr_s[uciwantype];
+        err_count ++;
+    }
+    
+    if(dns.length == 0){
+        error_title = 'DNS解析错误';
+        dns_buf = '无DNS. ';
+        err_count ++;
+    }
+        
+    if (autowantype) {
+      if(uciwantype_s[uciwantype] != autowantype_s[autowantype]){
+          link_buf = "可能宽带接入商设备故障，无法提供PPPoE拨号服务。或者上网类型设置错误! " + net_setup_url;
+          err_count ++;
+      }
+    }
+    
+    //自定义了dns
+    if(peerdns == 0 || peerdns == '0'){
+        peerdns_buf = "你已自定义了DNS，<a href='"+set_net_url+"' target='_blank'>去设置DNS</a>";
+        err_count ++;
+        if(type_defined(override_dns) && check_ip(override_dns)){
+            dns_buf += override_dns;
+            if(type_defined(override_dns2) && check_ip(override_dns2)){
+                dns_buf += '/' + override_dns2;
+            }
+        }
+    }
+    
+    //宽带占用
+    if(max_down > limit_down_speed){
+        up_down_buf = "已联网设备可能有大流量下载行为，速度"+max_down+"KB/s"+"，请查看"+dev_list;
+        err_count ++;
+    }
+    
+    if(!is_link_success(is_eth_link)){
+        error_info = append_msg(error_info, eth_link_buf, "<br/>");
+    }
+    error_info = append_msg(error_info, link_buf, "<br/>");
+    if(peerdns == 0 || peerdns == '0'){
+        error_info = append_msg(error_info, peerdns_buf, "<br/>");
+    }
+    error_info = append_msg(error_info, up_down_buf, "<br/>");
+    
+    if(uciwantype == 'wisp'){
+        need_check_channel = false;
+    }else{
+        need_check_channel = true;
+    }
+    
+    if(err_count > 0){
+        //$("#pop-state2").show();
+        //$("#pop-state2 .title").html(error_title);
+        //$("#pop-state2 .info").html(error_info);
+        if(err_count / 4 == 1 || link != true){
+            update_pop('pop-state2', 'ERROR', '', error_info);
+            //$("#hiwifi-icp").addClass("error");
+        }else{
+            update_pop('pop-state2', 'NORMAL', '', error_info);
+            //$("#hiwifi-icp").addClass("other");
+        }
+        update_info_box_show('pop-state2', false);
+    }else{
+        //$("#hiwifi-icp").addClass("success");
+        update_pop('pop-state2', 'SUCCESS', '', '');
+        update_info_box_show('pop-state2', true);
+    }
+}
+
+function get_ppp_errorcode_by_msg(msg){
+    var code = 0
+    var str = msg;
+
+    var ch = new Array;
+    var chu =  new Array;
+    ch = str.split(" ");
+
+    if (ch.length > 0){
+        chu = ch[0].split("E=");
+        if (chu.length>0){
+            code = chu[1];
+        }
+    }
+    return code
+}
+
+function get_ppp_error_msg(code){
+    if (error_list[code]){
+        return error_list[code];
+    }
+    return;
+}
+
+function update_ppp_status_view(){
+    //network/get_pppoe_status 
+    $.ajax({
+          url: "<%=luci.dispatcher.build_url("api", "network","get_pppoe_status")%>",
+          cache: false,
+          dataType: "json",
+          success: function(rsp){
+                var has_check_pppoe_status = false;
+                var ppp_msg = "";
+                var success = false;
+                if(rsp.code == 0){
+                    var special_msg = "";
+                    var special_num;
+                    special_num = parseInt(rsp.special_dial_num)+1;
+                    if (rsp.special_dial == "1"){
+                        special_msg = "正在尝试拨号 "+special_num+"/8 ";
+                    }
+                    
+                    if (rsp.status_code == -1){
+                        ppp_msg = get_ppp_error_msg(rsp.status_code);
+                        if(get_ppp_errorcode_by_msg(rsp.remote_message)){
+                             ppp_msg = get_ppp_error_msg(get_ppp_errorcode_by_msg(rsp.remote_message));
+                        };
+                    } else if (rsp.status_code == 0) {
+                       success = true;
+                    } else {
+                        if(rsp.status_code == 9999){
+                            ppp_msg = "WAN 未连接网线或宽带拨号断开，请检查WAN口网线和宽带帐号密码是否有效。";
+                        } else {
+                           // var error_msg = "错误  "+rsp.status_code+" "+rsp.status_msg ;
+                            ppp_msg = get_ppp_error_msg(get_ppp_errorcode_by_msg(rsp.remote_message));
+                        }
+                        
+                        if (rsp.remote_message){
+                            ppp_msg = get_ppp_error_msg(get_ppp_errorcode_by_msg(rsp.remote_message));
+                        }
+                    }
+                }
+                
+                if(!success){
+                  popstate('pop-state2', 'ERROR');
+                  pop_title_info('pop-state2', '', ppp_msg);
+                  update_info_box_show('pop-state2', false);
+                }
+                
+                add_temp_test_msg_line("3.2 pppoe "+JSON.stringify(rsp));
+        },error :function(rsp){
+            add_temp_test_msg_line("3.2 pppoe "+JSON.stringify(rsp));
+        }
+    });
+}
+
+function get_dev_type(){
+    var userAgentInfo=navigator.userAgent.toLocaleLowerCase();
+    var mobileKeywords=new Array("Android", "iPhone" ,"SymbianOS", "Windows Phone", "iPod", "MQQBrowser");
+    var padKeywords=new Array("iPad", "pad");
+    
+    var i = 0;
+    for (i = 0; i < mobileKeywords.length; i++)
+    {
+        if(userAgentInfo.match(mobileKeywords[i].toLocaleLowerCase())) {
+            return 'phone';
+        }
+    }
+    
+    i = 0;
+    for (i = 0; i < padKeywords.length; i++)
+    {
+        if(userAgentInfo.match(padKeywords[i].toLocaleLowerCase())) {
+            return 'pad';
+        }
+    }
+    
+    return 'pc';
+}
+
+function update_dev_type_view(){
+  var dev_type = get_dev_type();
+  $("#mydevpic").removeClass("pic mobile pad pc");
+  if(dev_type == 'phone'){
+    $("#mydevpic").addClass("pic mobile");
+  }else if(dev_type == 'pad'){
+    $("#mydevpic").addClass("pic pad");
+  }else if(dev_type == 'pc'){
+    $("#mydevpic").addClass("pic pc");
+  }else{
+    $("#mydevpic").addClass("pic pc");
+  }
+}
+
+function do_detect_url(url, ping, http, https, callback){
+    var request_data = {'url':url, 'ping':ping, 'http':http, 'https':https};
+    $.ajax({
+      url: "<%=luci.dispatcher.build_url("api", "network","net_detect_byurl_1")%>",
+      cache: false,
+      dataType: "json",
+      data: request_data,
+      timeout: 20000,
+      success: function(rsp){
+        callback(url, rsp.ping, rsp.http, rsp.https, rsp.httpCode, rsp.httpStatus);
+        add_temp_test_msg_line("4.1 4.2 ping http | " + url +" "+JSON.stringify(rsp));
+      },
+      error :function(jqXHR, textStatus, errorThrown){
+        callback(url, false, false, false);
+        add_temp_test_msg_line("4.1 4.2 ping http | " + url + " "+ JSON.stringify(jqXHR) +" "+textStatus);
+      }
+    });
+}
+
+function httpcode_msg(code){
+   //todo Http Status Code
+   return code;
+}
+
+// ping http 互联网
+function check_website(){
+    $(".state3").html("");
+    $(".item4").html("");
+    check_website_url_result_s = new Array();
+    var site_size = check_website_url_s.length;
+    var complete_size = 0;
+    $.each(check_website_url_s, function(index, value){
+        var state_url_id = "state_url_" + index;
+        var item_url_id = "item_url_" + index;
+        $(".state3").append("<p id='"+state_url_id+"'></p>");
+        $(".item4").append("<p id='"+item_url_id+"'>"+value+"</p>");
+        var need_test_https = false;
+        if(value.indexOf('hiwifi') > -1){
+           need_test_https = true;
+        }
+        do_detect_url(value, true, true, need_test_https, function(url, ping, http, https, httpCode, httpStatus){
+            if(ping == true && http == true &&
+                ((need_test_https == true && https == true) || need_test_https == false)){
+                if(type_defined(httpCode) && httpCode >= 500){
+                    $('#'+item_url_id).append('&nbsp;&nbsp;'+ httpcode_msg(httpCode));
+                    $('#'+state_url_id).removeClass("success error");
+                    $('#'+state_url_id).addClass("other");
+                    check_website_url_result_s[index] = true;
+                }else{
+                   $('#'+state_url_id).addClass('success');
+                   $('#'+item_url_id).addClass('success');
+                   check_website_url_result_s[index] = true;
+                }
+            }else{
+               $('#'+state_url_id).addClass('error');
+               $('#'+item_url_id).addClass('error');
+               check_website_url_result_s[index] = false;
+            }
+            complete_size ++;
+            
+            if(complete_size == site_size){
+                update_check_website_view();
+            }
+        });
+    });
+}
+
+function update_check_website_view(){
+    if(check_website_url_result_s.length == check_website_url_s.length){
+        var errnum = 0;
+        var set_num = 0;
+        var err_url_buf = '';
+        $.each(check_website_url_result_s, function(index, value){
+            if(value == false){
+                errnum ++;
+                set_num ++;
+                err_url_buf += check_website_url_s[index] + ' 访问异常<br/>';
+            }else if(value == true){
+                set_num ++;
+            }
+        });
+        if(set_num != check_website_url_s.length){
+            return;
+        }
+        if(errnum > 0){
+            if((errnum / check_website_url_s.length) > 0.5){
+                update_pop('pop-state3', 'ERROR', '', err_url_buf);
+            }else{
+                update_pop('pop-state3', 'NORMAL', '', err_url_buf);
+            }
+            update_info_box_show('pop-state3', false);
+        }else{
+            update_pop('pop-state3', 'SUCCESS', '', '');
+            update_info_box_show('pop-state3', true);
+        }
+    }
+}
+
+function check_website_once(){
+    $.ajax({
+          url: "<%=luci.dispatcher.build_url("api", "network","net_detect_website")%>",
+          cache: false,
+          dataType: "json",
+          success: function(rsp){
+                $(".state3").html("");
+                $(".item4").html("");
+                var allok = true;
+                var errnum = 0;
+                var url = "";
+                var ping = false;
+                var http = false;
+                var https = false;
+                for(var x in rsp){
+                    url = url_s[x];
+                    if(rsp[x].ping){
+                        ping = true;
+                    }else{
+                        errnum++;
+                        allok = false;
+                    }
+                    
+                    if(rsp[x].http){
+                        http = true;
+                    }else{
+                        errnum++;
+                        allok = false;
+                    }
+                    
+                    if(x=="hiwifi_app"){//只有 hiwifi app 检查 https  
+                        if(rsp[x].https){
+                            https = true;
+                        }else{
+                            errnum++;
+                            allok = false;
+                        }
+                    }else{
+                       https = true;
+                    }
+                    if(ping == true && http == true && https == true){
+                        $(".state3").append("<p class='success'></p>");
+                        $(".item4").append("<p class='success'>"+url+"</p>");
+                    }else{
+                        $(".state3").append("<p class='error'></p>");
+                        $(".item4").append("<p class='error'>"+url+"</p>");
+                    }
+                }
+                if(allok){
+                    update_pop('pop-state3', 'SUCCESS');
+                    update_info_box_show('pop-state3', true);
+                }else{
+                    if(errnum==1){
+                        update_pop('pop-state3', 'NORMAL', '', '网站诊断有失败，建议您重新诊断，或者重新打开浏览器，访问网站。');
+                    }else{
+                        update_pop('pop-state3', 'ERROR', '', '网站连接诊断失败，可能是运营商网络故障，稍后请再次打开浏览器，重新访问网站。');
+                    }
+                    update_info_box_show('pop-state3', false);
+                }
+          },
+          error :function(){
+              update_pop('pop-state3', 'ERROR', '诊断失败', '访问路由器失败，请检查是否正确连接了路由器。');
+              update_info_box_show('pop-state3', false);
+          }
+    });
+}
+
+var dev_hiwifi_result_s = new Array();
+
+//设备到极路由测试组
+function update_dev_hiwifi_alert(){
+    if(dev_hiwifi_result_s.length == 2){
+        var test_size = dev_hiwifi_result_s.length;
+        var error = 0;
+        var normal = 0;
+        var success = 0;
+        var msg = '';
+        $.each(dev_hiwifi_result_s, function(index, value ) {
+            if(value.rst == 'ERROR'){
+                error++;
+            }else if(value.rst == 'NORMAL'){
+                normal++;
+            }else if(value.rst == 'SUCCESS'){
+                success++;
+            }
+            if(typeof(value.msg) != "undefined" && value.msg.length > 0){
+                msg += value.msg + '；';
+            }
+        });
+        msg = replacelastchar(msg, '；', "。");
+        
+        var success_pencent = success / test_size;
+        var line_class = '';
+        var pop_state_value = '';
+        var state_result = false;
+        var pop_title = '';
+        var pop_info = '';
+        if(success_pencent == 1 || success_pencent == '1'){
+            line_class = "success-right";
+            state_result = true;
+            pop_state_value = 'SUCCESS';
+        }else if(success_pencent == 0 || success_pencent == '0'){
+            line_class = "error-left";
+            pop_state_value = 'ERROR';
+            state_result = false;
+            pop_title = '网络不畅';
+            pop_info = msg;
+        }else{
+            line_class = "error-left";
+            pop_state_value = 'NORMAL';
+            state_result = false;
+            pop_title = '网络不畅';
+            pop_info = msg;
+        }
+        set_line_class('me-hiwifi', line_class);
+        update_pop('pop-state1', pop_state_value, pop_title, pop_info);
+        update_info_box_show('pop-state1', state_result);
+    }
+}
+
+// 设备到极路由
+function update_dev_hiwifi_view(){
+    dev_hiwifi_result_s = new Array();
+    test_device_signal(function(rst, msg){
+        dev_hiwifi_result_s.push({'item':'device_signal','rst':rst, 'msg':msg});
+        update_dev_hiwifi_alert();
+    });
+    
+    /*
+    test_net_detect_ping_remote(function(rst, msg){
+        dev_hiwifi_result_s.push({'item':'net_detect_ping_remote','rst':rst, 'msg':msg});
+        update_dev_hiwifi_alert();
+    });
+    */
+    
+    test_dev_hiwifi_http_get(function(rst, msg){
+        dev_hiwifi_result_s.push({'item':'dev_hiwifi_http_get','rst':rst, 'msg':msg});
+        update_dev_hiwifi_alert();
+    });
+}
+
+//2.1
+function test_device_signal(callback){
+    var request_data = {'mac':mac_local}; 
+    var device_signal = false;
+    $.getJSON("<%=luci.dispatcher.build_url("api", "network","device_signal")%>",request_data,function(rsp) 
+    { 
+        var msg = rsp.msg;
+        var line_class = '';
+        var rst = 'ERROR';
+        var pop_title = '';
+        var pop_info = '';
+        if(rsp.code != 0 || rsp.code != '0'){
+            // mac 错误时忽略
+            if(rsp.code == 521 || rsp.code == '521'){
+                rst = 'SUCCESS';
+            }else{
+                rst = 'ERROR';
+            }
+        }else{
+            if(rsp.type == 'wifi'){
+              if(rsp.signal > 60){
+                 device_signal = true;
+              }else if(rsp.signal > 30){
+                 device_signal = true;
+              }else{
+                device_signal = false;
+              }
+            }else if(rsp.type == 'line'){
+                device_signal = true;
+            }
+            var devname = '';
+            try{
+                if(rsp.name && rsp.name.length > 16){
+                    devname = rsp.name.substr(0, 13)+'...';
+                }
+                $("#mydevname").html(devname);
+            }catch(e){
+            }
+            update_dev_type_view();
+            if(device_signal == true){
+                rst = 'SUCCESS';
+            }else{
+                rst = 'ERROR';
+                msg = '请靠近极路由，或者调整天线'
+            }
+        }
+        if(type_defined(callback)){
+            callback(rst, msg);
+        }
+        add_temp_test_msg_line("2.1 手机回传信号强度 "+JSON.stringify(rsp));
+    })
+    .fail(function(rsp){
+        var rst = 'ERROR';
+        var msg = '请求失败';
+        if(type_defined(callback)){
+            callback(rst, msg);
+        }
+        add_temp_test_msg_line("2.1 手机回传信号强度 "+JSON.stringify(rsp));
+    });
+}
+
+//2.2
+function test_net_detect_ping_remote(callback){
+    var request_data = {};
+    $.getJSON("<%=luci.dispatcher.build_url("api", "network","net_detect_ping_remote")%>",request_data,function(rsp) 
+    { 
+        var msg = rsp.msg;
+        var line_class = '';
+        var rst = 'ERROR';
+        var pop_title = '';
+        var pop_info = '';
+        if(rsp.code != 0 || rsp.code != '0'){
+            rst = 'ERROR';
+        }else{
+            if(rsp.loss == 0 && rsp.min <= 100){
+               rst = 'SUCCESS';
+            }else{
+               rst = 'NORMAL';
+               msg = "ping丢包"
+            }
+        }
+        if(type_defined(callback)){
+            callback(rst, msg);
+        }
+        add_temp_test_msg_line("2.2 ping "+JSON.stringify(rsp));
+    })
+    .fail(function(rsp){
+        var rst = 'ERROR';
+        var msg = '请求失败';
+        if(type_defined(callback)){
+            callback(rst, msg);
+        }
+        add_temp_test_msg_line("2.2 ping "+JSON.stringify(rsp));
+    });
+}
+
+//2.3
+function test_dev_hiwifi_http_get(callback){
+    $("#test_host_img")
+    .error(function() {
+        add_temp_test_msg_line("2.3 http-->router error");
+        var rst = 'ERROR';
+        var msg = '您的终端自定义了DNS，可能会影响上网效果，请重新设置DNS';
+        if(type_defined(callback)){
+            callback(rst, msg);
+        }
+    })
+    .load(function() {
+        add_temp_test_msg_line("2.3 http-->router success");
+        var rst = 'SUCCESS';
+        var msg = '';
+        if(type_defined(callback)){
+            callback(rst, msg);
+        }
+    })
+    .attr("src", "http://hiwifi.com/turbo-static/turbo/web/images/logo_130726.png");
+}
+
+// 临时测试信息
+function add_temp_test_msg_line(msg){
+   if(debug == 1 || debug == '1'){
+       $("#temp_test_msg_div").append(msg);
+       $("#temp_test_msg_div").append("<br/>");
+   }
+}
+</script>
+</html>

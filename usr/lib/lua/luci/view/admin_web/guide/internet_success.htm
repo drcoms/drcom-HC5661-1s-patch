@@ -1,0 +1,129 @@
+<%
+local ver  = require "luci.version"
+local http = require "luci.http"
+
+os.execute("rm /tmp/guide_net 2>/dev/null")
+--luci.util.set_agreement_switch("ACCEPTED",1)
+--luci.util.set_agreement_switch("HAVEBEENSET",1)
+
+local is_internet_connect = luci.util.is_internet_connect()
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>极路由｜首次安装－上网方式</title>
+<link rel="stylesheet" href="<%=resource%>/guide/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script src="<%=resource%>/guide/js/jquery-1.8.2.min.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/custom_checkbox_and_radio.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/jquery.dropkick-1.0.0.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/application.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+    <div id="page">
+        <div id="header">
+            <h1><span id="logo">极路由｜首次安装</span></h1>
+        </div><!-- /header -->
+
+        <div id="content">
+            <h2 style="font-size: 1.3em;"><%if is_internet_connect == 1 or is_internet_connect == "1" then%><!--<span class="icon success">已成功接入互联网--><%else%>未连接<%end%></span></h2>
+            <div id="download_view" style="display:none">
+                <div class="success-tit">手机远程控制</div>
+                <div class="app" style="margin-top:20px;"></div>
+                <a id="applink" href="javascript:void(0);" class="btn radius" style="margin-top:30px;">体验前所未有的玩法</a>
+            </div>
+            <div id="ios5_lower_download_view" style="display:none">
+                <div class="success-tit">手机远程控制</div>
+                <div class="success-info">体验前所未有的路由器玩法</div>
+                <div class="app"></div>
+                <div class="info-tip"><span>设置完成后，请打开<font style="color:red">App Store</font></span><span class="appstore"></span><br/><span>搜索“<font style="color:red">极路由</font>”下载APP</span></div>
+            </div>
+            <a id="skip_link" href="javascript:void();" class="link skip" >继续设置</a>
+        </div><!-- /content -->
+
+        <div id="footer">
+        </div><!-- /footer -->
+    </div><!-- /page -->
+</body>
+<script type="text/javascript">
+var admin_page = '<%=luci.dispatcher.build_url("admin_web", "guide", "admin")%>';
+function next(){
+    window.location.href = admin_page;
+}
+$(window).load(function() {
+    $("#skip_link").click(function(){
+        next();
+    });
+    
+    var u = navigator.userAgent;
+    var mobile = !!u.match(/AppleWebKit.*Mobile.*/);
+    var ios = !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/);
+    var ios5_lower = !!u.match(/\(i[^;]+;( U;)? CPU iPhone OS [1-5].+Mac OS X/);
+    var android = u.indexOf('Android') > -1 || u.indexOf('UCBrowser') > -1;
+
+    if(ios5_lower){
+        $("#ios5_lower_download_view").show();
+        $("#skip_link").removeClass('link skip');
+        $("#skip_link").addClass('btn radius');
+        $("#skip_link").show();
+    }else{
+        $("#applink").html('体验前所未有的玩法');
+        document.getElementById("applink").onclick = function(){
+           window.location.href = '<%=luci.dispatcher.build_url("admin_web", "guide", "open_app")%>';
+        }
+        $("#download_view").show();
+        $("#skip_link").show();
+    }
+});
+
+function ios_open_download(){
+    applink(appstore);
+}
+
+var appstore = "https://itunes.apple.com/us/app/hiwifi/id598232355?mt=8";
+var AndoridDownload = "http://www.hiwifi.com:80/download/Android/";
+function applink(fail){  
+    return function(){  
+        var clickedAt = +new Date;  
+        // During tests on 3g/3gs this timeout fires immediately if less than 500ms.  
+        setTimeout(function(){  
+                  // To avoid failing on return to MobileSafari, ensure freshness!  
+                  if (+new Date - clickedAt < 2000){  
+                    window.location = fail;  
+                  }
+                  }, 1000);
+    };  
+}
+
+function android_open_download(){
+    setTimeout("to_download()", 3000);
+}
+
+function to_download(){
+    window.open("http://www.hiwifi.com/download/Android/");
+}
+
+function set_agreement_done(success_callback){
+    //system/set_agreement_done 
+    var request_date = {}; 
+    $.getJSON("<%=luci.dispatcher.build_url("api", "system","set_agreement_done")%>",request_date,function(rsp) 
+    {
+       if(rsp && (rsp.code == 0 || rsp.code == "0")){
+         if(typeof(success_callback) == "function"){
+            success_callback();
+         }
+       }else{
+        setTimeout(function(){
+            set_agreement_done(success_callback);
+        }, 1000);
+       }
+    }).fail(function(){
+        setTimeout(function(){
+            set_agreement_done(success_callback);
+        }, 1000);
+    })
+}
+
+</script>
+</html>

@@ -1,0 +1,383 @@
+<%
+--[[
+	Info	mac 地址过滤
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local ver  = require "luci.version"
+local adv_menu = luci.util.get_adv_menu()
+local request_uri = luci.http.getenv("REQUEST_URI")
+%> 
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/util.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/validators.min.js?v=<%=ver.svnRevNum%>"></script>
+<style type="text/css">
+	table.zone td.tor{
+		text-align: right;
+		width:120px;
+		line-height:14px;
+
+	}
+	table.zone td.toi{
+
+	}
+	.input_err{
+		border-color: red;
+		border-width: 2px;
+	}
+	.onlinedev{font-size:12px;text-align: left;text-indent: 35px}
+</style>
+</head>
+<body>
+<div class="title">
+	<h2>高级设置<i>设置路由器安全 , 及其他高级设置</i></h2>
+</div>
+<div class="menu">
+	<% luci.util.output_adv_menu() %>
+</div>
+<div class="box setup_box">
+	<form id="form1"> 
+		<div class="area">
+			<div class="group">
+				<h4 class="item-title" style="margin-bottom:20px;">无线 MAC 地址访问控制</h4>
+				<p class="item-txt"><span class="on-off" style="font-size:14px;">开关<button type="button" class="on" style="margin-left:20px;">开关</button></span></p>
+			</div>
+			<div class="group" id="ra_box_info" >
+				<p class="item-txt" id="ra_box_info2">读取中...</p>
+			</div>
+			<div class="group" style="display:none;" id="ra_box">
+				<p class="item-txt"><span>
+				<input id="ra_stop" style="display:none;" type="radio" name="status" value="stop" />
+				<input id="ra_allow" type="radio" name="status" value="allow" class="stop_disabled"/>
+				<label for="ra_allow" class="label"> 允许以下MAC地址访问</label></span>
+				<span>
+				<input id="ra_deny" type="radio" name="status" value="deny" class="stop_disabled"/>
+				<label for="ra_deny" class="label"> 禁止以下MAC地址访问</label></span></p>
+				<ul id="macs_box" class="item-list">
+					
+					<li id="add_botton" class="stop_disabled"><a href="javascript:void();"><img border="0" src="<%=resource%>/web/images/addmac.png"></a></li>
+				</ul>
+				<div class="clear"></div>
+				<b>当前使用设备 MAC 地址: </b><span id="mac_local">loading...</span>
+				<div class="clear"></div>
+				<p class="tips error" style="display:none;"><span>这里显示错误提示</span></p>
+				<div class="button-row" style="margin-top:20px;">
+					<input type="button" value="保存" class="btn" id="submit_btn" disabled="disabled">
+					<img style="display:none;" id="loading2" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器">
+				</div>
+			</div>
+		</div>
+	</form>
+	
+</div>
+<script type="text/javascript">
+//$.ajaxSettings.async = false;
+function submit_from(){
+	//wifi/get_status_list 
+	var request_date = {}; 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_status_list")%>",request_date,function(rsp) 
+	{ 
+
+		if(rsp.code == 0){
+			//取最后一个
+			var dev_index = rsp.device_status.length-1;
+			var last_dev = rsp.device_status[dev_index].device;
+			//wifi/view_detail 
+			$("#loading2").show();
+			$("#submit_btn").attr("disabled",true);
+			
+			//wifi/set_mac_filter 
+			var request_date =  $("#form1").serializeArray();
+			request_date.push({"name":"device","value":last_dev});
+			$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","set_mac_filter")%>",request_date,function(rsp) 
+			{
+				
+				if(rsp.code == 0){
+					window.parent.art.dialog({icon:"succeed",title:false,content:"设置成功! "+rsp.msg}).lock().time(4);
+				} else {
+					art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+				}
+				
+				$("#loading2").hide();
+				$("#submit_btn").attr("disabled",false);
+				
+			})
+		} else {
+			 art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+		}
+	})
+}
+
+//检查是否屏蔽了自己
+function check_mac_alert(local_mac,form_macs,flider_type){
+	var mac_one;
+	var result = true;
+	if (flider_type == "deny"){
+		result = true;
+		form_macs.each(function(index){
+			mac_one = trim(mac_format(this.value));
+			if (mac_one == local_mac) {
+				result = false;
+			 }
+		});
+	} else if (flider_type == "allow"){
+		result = false;
+		form_macs.each(function(index){
+			mac_one = trim(mac_format(this.value));
+			if (mac_one == local_mac) {
+				result = true;
+			 }
+		});
+	}
+	return result;
+}
+
+//检查 mac 格式是否正确
+function check_mac_format(form_macs){
+	var mac_one;
+	var result = true;
+		form_macs.each(function(index){
+			mac_one = trim(mac_format(this.value));
+			if(!validators.macaddr(mac_one) && mac_one != ""){
+				result = false;
+			}
+		});
+	return result;
+}
+
+function trim(str){ //删除左右两端的空格
+    return str.replace(/(^\s*)|(\s*$)/g, "");
+}
+
+$(function(){
+	var local_mac
+	//wifi/get_status_list 
+	var request_date = {}; 
+	$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_status_list")%>",request_date,function(rsp) 
+	{ 
+		
+		if(rsp.code == 0){
+			//取最后一个
+			var dev_index = rsp.device_status.length-1;
+			var last_dev = rsp.device_status[dev_index].device;
+			//wifi/view_detail 
+
+			//wifi/get_mac_filter_list 
+			var request_date = {"device":last_dev}; 
+			$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_mac_filter_list")%>",request_date,function(rsp) 
+			{ 
+				$("#submit_btn").attr("disabled",false);
+				
+				var macs_rsp;
+				var input_cnt;
+				
+				macs_rsp = rsp.macs;
+				
+				if (macs_rsp.length>0){
+					
+					//去重复
+					macs_rsp = macs_rsp.del();
+					make_input_boxs(macs_rsp);
+					
+				} else {
+					make_input_boxs(macs_rsp);
+				}
+				local_mac = mac_format(rsp.mac_local);
+				$("#mac_local").html(local_mac);
+				if(rsp.status=="stop"){
+					swicth_act("off");
+				} else if (rsp.status=="allow" || rsp.status=="deny") {
+					swicth_act("on",rsp.status);
+					$("input:radio[name='status'][value='"+rsp.status+"']").attr("checked","checked");
+				} 
+			})
+	
+		} else {
+			 art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+		}
+		
+	})
+	
+	//提交
+	$("#submit_btn").click(function(){
+		var macs_val =  $("input[name='macs[]']");
+		if(macs_val){
+			macs_val.each(function(index){
+				var mac_one = trim(mac_format(this.value));
+				if(mac_one!=""){
+					this.value = mac_one;
+				}
+			});	
+		}
+		
+		//检查格式
+		if(!check_mac_format(macs_val)){
+			art.dialog({icon:"error",title:false,content:"MAC 地址格式错误"}).lock().time(3);
+			return false;
+		}
+		
+		//检查是否屏蔽自己
+		var status_now = $("input:radio[name='status']:checked").val();
+		var reslut_check = check_mac_alert(local_mac,macs_val,status_now);
+		var info_alert;
+		if (reslut_check){
+			submit_from();
+		}  else {
+			if (status_now == "deny"){
+				info_alert = "禁止名单里面有当前设备的MAC地址，提交后当前设备可能无法通过 WIFI 连接路由器，是否提交？";
+			} else if (status_now == "allow"){
+				info_alert = "允许名单里面没有当前设备的MAC地址，提交后当前设备可能无法通过 WIFI 连接路由器，是否提交？";
+			}
+			art.dialog({
+				title:false,
+			    content: info_alert,
+			    icon: 'warning',
+			    ok: function(){
+			    	this.close();
+			    	submit_from();
+			    },
+			    okVal: "确认提交", 
+			    cancel: function(){
+			        this.close();
+			        return false;
+			    }
+			}).lock();
+		}
+	})
+	
+	
+	
+	//开关
+	$(".on-off").click(function(){
+		var switch_b = $(this).children("button");
+		var status_now = switch_b.attr("class");
+		if(status_now == "on"){
+			//关闭服务，如果原来有数据，提示关闭后曾经记录的mac将清空
+			//清空数据
+	    	//wifi/set_mac_filter 
+	    	
+			var request_date =  $("#form1").serializeArray();
+			$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","save_mac_filter")%>",request_date,function(rsp) 
+			{
+			})
+			
+	    	macs_val =  $("input[name='macs[]']");
+			if(macs_val){
+				macs_val.each(function(index){
+					this.value='';
+				});	
+			}
+	    	submit_from();
+	    	swicth_act("off");
+			
+ 		} else if (status_now == "off"){
+ 			$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","load_mac_filter")%>",request_date,function(rsp) 
+			{
+				if(rsp.macs){
+					$("#macs_box > li:not(#add_botton)").remove();
+					if (rsp.macs.length>0){
+						//去重复
+						rsp.macs = rsp.macs.del();
+						make_input_boxs(rsp.macs);
+					} else {
+						make_input_boxs(rsp.macs);
+					}
+				}
+				swicth_act("on");
+			})
+ 		}
+	})
+	
+	//开关动作
+	function swicth_act(action){
+		var switch_b = $(".on-off").children("button");
+		if(action == "on"){
+			switch_b.addClass("on");
+			switch_b.removeClass("off");
+			$('#ra_stop').attr("checked", false);
+			$('#ra_allow').attr("checked", false);
+			$('#ra_deny').attr("checked", false);
+			$(".stop_disabled").attr("disabled",false);
+			$("#ra_box_info").hide();
+			$("#ra_box").show();
+ 		} else if (action == "off"){
+ 			switch_b.addClass("off");
+			switch_b.removeClass("on");
+			$('#ra_stop').attr("checked", true);
+			$('#ra_allow').attr("checked", false);
+			$('#ra_deny').attr("checked", false);
+			$(".stop_disabled").attr("disabled",true);
+			$("#ra_box_info").show();
+			$("#ra_box_info2").html("服务未打开");
+			$("#ra_box").hide();
+ 		}
+	}
+	
+	$(".stop_disabled").parent().click(function(){
+		var swich_val = $("input:radio[name='status']:checked").val();
+		if(swich_val=="stop"){
+			art.dialog({icon:"error",title:false,content:"请打开开关,才能设置该项"}).lock().time(3);
+		}
+	})
+	
+	//添加输入框
+	var add_cl = 0;
+	$("#add_botton").live("click",function(){
+		var add_cnt = 6;
+		var box_cnt = $("input[name='macs[]']").length;
+		if (box_cnt >= 64) {
+			art.dialog({icon:"error",title:false,content:"最多只能填写 64 个  MAC 地址"}).lock().time(4);
+			return false;
+		}
+		var next_max = $("input[name='macs[]']").length+6;
+		if (next_max >= 64) {
+			add_cnt = 64-box_cnt;
+		}
+		var status_now = $("input[name='status']:checked").val();
+		if (status_now != "stop"){
+			for(var i=0;i<add_cnt;i++){
+				$(this).before('<li><input type="text" name="macs[]" class="txt-input stop_disabled"/></li>');
+			}
+			var top_he = 100+add_cl*72;
+			$('.setup_box').animate({scrollTop:top_he},1000);
+			add_cl++;
+		}
+	})
+	
+	//make input boxs
+	function make_input_boxs(datas){
+		var left_box=8; 	//补充 空的 input box 个数
+		if (datas.length) {
+			if(datas.length>0 && datas.length<7){
+				left_box = 8-datas.length;
+			} else {
+				var yu = datas.length%3;
+				var bu = 3-yu + 3 - 1;
+				left_box=bu;
+			}
+		}
+		
+		for(var i=0;i<datas.length;i++){
+			datas[i] = mac_format(datas[i]);
+			$("#add_botton").before('<li><input type="text" name="macs[]" class="txt-input stop_disabled" value="'+datas[i]+'" /></li>');
+		}
+		for(var i=0;i<left_box;i++){
+			$("#add_botton").before('<li><input type="text" name="macs[]" class="txt-input stop_disabled" value="" /></li>');
+		}
+	}
+	
+})
+
+</script>
+</body>
+</html>

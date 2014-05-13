@@ -1,0 +1,154 @@
+<%
+	local urlbackReq = luci.util.fliter_unsafe(luci.http.formvalue("urlback"))
+	if urlbackReq == nil or urlbackReq==""  then
+		urlbackReq = luci.http.getenv("HTTP_REFERER")
+	end
+	local clinet_bind = luci.http.formvalue("clinet_bind")
+	local guide_mode = luci.http.formvalue("guide_mode")
+	local auto_login = luci.http.formvalue("auto_login")
+	
+	--是否弹出协议
+	local agreementfile = "/etc/agreement"
+	local rv = { }
+	local nfs = require "nixio.fs"
+	local io = require "io"
+	local fd = io.open(agreementfile, "r")
+	local agree_status
+	
+	if fd then
+		while true do
+			local ln = fd:read("*l")
+			if not ln then
+				break
+			else
+				local name,status = ln:match("^(%S+):(%S+)")
+				if name and status then
+					if name == "ACCEPTED" then
+						agree_status = status
+						break
+					end
+				end
+			end
+		end
+		fd:close()
+	end 
+	
+	if agree_status == "0" then 
+		luci.http.redirect(luci.dispatcher.build_url("admin_web", "system","agreement").."?from=back")
+	end
+		
+	math.randomseed(os.time())
+	local random = math.random()
+	
+	local loginfail = false
+ 	if fuser then 
+		-- lock 数+1
+		luci.util.up_loginlock()
+		loginfail = true
+	end
+	
+	--是否显示初始 密码
+	local showpasswordfile = "/etc/app/showpassword_cache"
+	local fd = io.open(showpasswordfile, "r")
+	local showpassword_ln = fd:read("*l")
+	
+	local is_defult_password = luci.sys.user.checkpasswd("root", "admin")
+
+%>
+<%
+if (clinet_bind == "1" or clinet_bind == 1) and is_defult_password  then
+%>
+<form id="logingo" method="post" action="<%=luci.dispatcher.build_url('admin_mobile','clinet_bind')%>?<%=random%>" style="display:none;">
+    <input id="textinput1" name="username" placeholder="" value="admin" readonly="readonly" type="hidden" />
+    <input class="cbi-input" type="password" name="password" value="admin" />
+	<input type="hidden" name="urlback" value="<%=luci.dispatcher.build_url("admin_mobile")%>" />
+</form>
+<script language="javascript">
+	document.getElementById("logingo").submit();
+</script>
+<%
+luci.http.close();
+end
+%>
+<%+header%>
+<style type="text/css">
+	.cbi-map{
+		width:400px;
+	}
+	.cbi-input{
+		width:150px;
+		height:20px;
+		line-height:20px;
+		font-size:18px;
+	}
+</style>
+<script type="text/javascript">//<![CDATA[	
+	function check_form(obj){
+		$("#submit_btn").attr("disabled","disabled");
+		return true;
+	}
+//]]></script>
+<form id="loginForm" method="post" action="<%=luci.dispatcher.build_url("admin_mobile")%><%if clinet_bind == "1" or clinet_bind == 1 then%>?clinet_bind=1<%end%><%if guide_mode == "1" then%>?guide_mode=1<%if auto_login == "1" then%>&auto_login=1<%end%><%end%>" onsubmit="return check_form(this)">
+		<% if not luci.util.is_loginlock() then %>
+				<input id="textinput1" name="username" placeholder="" value="<%=duser%>" readonly="readonly" type="hidden" />
+				<div data-role="fieldcontain">
+					<fieldset data-role="controlgroup">
+					<label for="input_password_login"> 路由器密码  </label>
+					<input class="cbi-input" type="<% if showpassword_ln ~= '0' then %>text<% else %>password<% end %>" name="password" id="input_password1" <% if showpassword_ln ~= '0' then %>value="<%=luci.version.default_password%>"<% end %> name="password" id="input_password_login" />
+					</fieldset>
+				</div>
+				<%- if loginfail then %>
+				<div data-role="fieldcontain">
+					<div class="clear"></div>
+						<div class="error" style="color:red;font-size:14px;clear:both; text-align:left;">
+						密码错误！请重试
+						<% if tonumber(luci.util.get_loginlock()) > 0 then 
+							local resttime = 10 - luci.util.get_loginlock()
+						%>
+							已经错误 <%=luci.util.get_loginlock()%> 次 , 还可以尝试 <%=resttime%> 次
+						<% end %>
+						</div>
+					
+				</div>
+				<% end -%>
+				<% if showpassword_ln ~= '0' then %>
+					<br>初始密码为  <span style="font-size:16px;color:red;">admin</span>，登录后点击右上  "修改密码"，修改后会使路由器更安全<br>
+				<% else %>
+					<%if is_defult_password then %>
+					<br><img src="<%=resource%>/web/images/alert-icon.png" height="15" />密码是admin不安全,登录后点击右上"修改密码"<br/><br/>
+					<%end%>
+				<% end %>
+				<input type="hidden" name="urlback" value="<%=urlbackReq%>" />
+				<input type="submit" value="<%:登录%>"/>
+				<%if clinet_bind == "1" or clinet_bind == 1 then%>
+				<div align="center"><br>(登录后将自动绑定)<br>
+				当前路由器  - <b>MAC</b> <%luci.http.write(tw.get_mac())%></div>
+				<%end%>
+		<% else %>
+			<% if tonumber(luci.util.get_loginlock()) > 0 then %>
+			<div class="error" style="color:red;font-size:14px;clear:both; text-align:left; padding-top:20px;">
+				密码输入错误次数过多，请拔出电源，5秒后接通。重启路由
+			</div>
+			<% end %>
+		<% end %>
+</form>
+<script type="text/javascript">
+<!--
+$(function(){
+    var auto_login = '<%=auto_login%>';
+    var loginfail = '<%=loginfail%>';
+    loginAutoPro();
+    function loginAutoPro(){
+        if(loginfail != 'true' && auto_login == '1'){
+            $("#loginForm").submit();
+        }
+    }
+
+	$('#input_password_login').focus().select();
+})
+//-->
+
+
+</script>
+<%if clinet_bind == "1" or clinet_bind == 1 then luci.http.close() end%>
+<%+footer%>

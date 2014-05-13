@@ -1,0 +1,95 @@
+<%
+local ver  = require "luci.version"
+local sys = require "luci.sys"
+local fs  = require "nixio.fs"
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>DrCOM for JLU</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+
+<style type="text/css">
+	table.zone td.tor{
+		text-align: right;
+		width:120px;
+		line-height:14px;
+	}
+	.row {
+		padding: 0 0 0 30px;
+	}
+	.row p .txt {
+		margin-left: 200px;
+	}
+	.select_input {
+		margin-left: 200px;
+		height: 30px;
+		line-height: 30px;
+	}
+</style>
+<body>
+<div class="title">
+	<h2>DrCOM for JLU</h2>
+</div>
+<div class="menu">
+ <% luci.util.output_adv_menu() %>
+</div>
+
+<div class="box setup_box" style="height: 560px;">
+	<form id="form1"> 
+		<ul class="ullist" style="position:relative">
+			<fieldset class="cbi-section" id="cbi-x3c8021x-base_set">
+				<legend>drcom.conf</legend>
+				<li>
+					<div class="memu row">
+						<p>
+              <textarea rows="15" cols="100" name="conf" class="txt"><%local data = fs.readfile("/etc/drcom.conf");luci.http.write(data)%></textarea>
+						</p>
+					</div>
+				</li>
+			</fieldset>
+			<li>
+				<div class="btnbox">
+					<input type="button" value="运行DrCOM" class="btn" id="submit_btn" disabled="disabled"/>
+					<img style="display:none;" id="loading2" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器" />
+				</div>
+			</li>
+		</ul>
+	</form>
+</div>
+<script type="text/javascript">
+$(function(){
+	$("#submit_btn").attr("disabled",false);
+	//提交
+	$("#submit_btn").click(function(){
+		
+		$("#loading2").show();
+		$("#submit_btn").attr("disabled",true);
+		
+		//plugin/set_x3c 
+		var request_date = {}; 
+		var request_date =  $("#form1").serializeArray(); 
+
+		$.getJSON("<%=luci.dispatcher.build_url("api", "plugin","set_drcom")%>",request_date,function(rsp) 
+		{ 
+			if(rsp.code == 0){
+				art.dialog({icon:"succeed",title:false,content:"启动成功!"}).lock().time(2);
+			} else {
+				art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(4);
+			}
+			
+			$("#loading2").hide();
+			$("#submit_btn").attr("disabled",false); 
+		})
+		
+	})
+})
+</script>
+</body>
+</html>

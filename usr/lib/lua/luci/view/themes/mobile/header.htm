@@ -1,0 +1,76 @@
+<%
+	local sys  = require "luci.sys"
+	local http = require "luci.http"
+	local disp = require "luci.dispatcher"
+
+	local request  = disp.context.path
+	local request2 = disp.context.request
+
+	local leaf = request2[#request2]
+
+
+	http.prepare_content("text/html; charset=UTF-8")
+	
+	local ver  = require "luci.version"
+	math.randomseed(os.time())
+	local random = math.random()
+-%>
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=0.9,maximum-scale=2" />
+<meta http-equiv="pragma" content="no-cache">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="expires" content="Wed, 26 Feb 1997 08:21:57 GMT">
+<title>垃圾路由器的后台</title>
+<!-- 原来 -->
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery.cookie.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/interface.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/util.js?v=<%=ver.svnRevNum%>"></script>
+<!-- 原来 end -->
+
+<link rel="apple-touch-icon-precomposed" sizes="57x57" href="<%=resource%>/mobile/image/apple-touch-icon-57n.png" />
+<link rel="apple-touch-icon-precomposed" sizes="72x72" href="<%=resource%>/mobile/image/apple-touch-icon-72n.png" />
+<link rel="apple-touch-icon-precomposed" sizes="114x114" href="<%=resource%>/mobile/image/apple-touch-icon-114n.png" /> 
+<link rel="apple-touch-icon-precomposed" sizes="144x144" href="<%=resource%>/mobile/image/apple-touch-icon-144n.png" />
+
+<script type="text/javascript">//<![CDATA[
+	var URL_ROOT_PATH = "<%=disp.build_url("")%>"
+	var i18_connection = "<%:连接中...%>";
+	var i18_second = "<%:秒%>";
+	var i18_hour = "<%:小时%>";
+	var i18_minute = "<%:分钟%>";
+	var i18_day = "<%:天%>";
+  //]]></script>
+
+<link rel="stylesheet" href="<%=resource%>/mobile/css/jquery.mobile-1.1.0.css?v=<%=ver.svnRevNum%>" />
+<link rel="stylesheet" href="<%=resource%>/mobile/css/mobile.css?v=<%=ver.svnRevNum%>" />
+<script src="<%=resource%>/mobile/js/jquery.mobile-1.1.0.js?v=<%=ver.svnRevNum%>"></script>
+<script language="javascript" type="text/javascript">
+format_is_mobile();
+if(!needJumpMobile()){
+	window.location.href="<%=luci.dispatcher.build_url('admin_web')%>";
+}
+</script>
+</head>
+<body>
+<div data-role="page" id="page1" data-dom-cache="false">
+	<div data-theme="b" data-role="header">
+		
+		<h1 class="jqm-logo" style="margin:9px 5px 3px 5px;"></h1>
+		<%
+		if leaf == "info" or leaf == "network" or leaf == "wifi" then
+		%>
+			<a data-role="button" style="top: 6px;" data-transition="flip" data-theme="b" href="<%=luci.dispatcher.build_url('admin_mobile')%>?<%=random%>" data-icon="home" data-iconpos="left" <%if is_home==1 then%>style="display:none;"<%end%> >
+	       		<%:首页%>
+	        </a>
+		<%
+		end
+		%>
+	</div>
+	<div data-role="content" style="padding-top:5px;">
+		<div data-role="navbar" data-iconpos="left">
+		</div> 

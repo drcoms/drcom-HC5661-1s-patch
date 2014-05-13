@@ -1,0 +1,136 @@
+<%
+--[[
+	Info	wifi 已经连接设备列表
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local ver  = require "luci.version"
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+<div class="title">
+	<h2>无线网络已连接设备列表<i>随时掌控联网设备，预防被蹭网</i></h2>
+</div>
+<div class="routers">
+	<p class="tips">安装手机远程管理应用可以轻松踢除可疑设备！<a href="http://www.hiwifi.com/mobile/" target="_blank">HiWiFi 远程控制 App</a> | <a href="javascript:void();" onclick="window.parent.open_windows('set_wifi');">设置无线密码</a> | <a href="javascript:void();" onclick="window.parent.open_windows('mac_filter');">设置  MAC 限制</a><br><br> </p>
+	<table width="100%" border="0" cellspacing="0" cellpadding="0" class="routers-table" id="device_list">
+		<tr>
+	    	<th class="mac" scope="col" style="width:120px">MAC地址</th>
+	    	<th class="ip" scope="col" style="width:110px">IP</th>
+	    	<th class="name" scope="col">名称</th>
+	    	<th class="signal" scope="col">信号强度</th>
+	    </tr>
+	    <tr id="loading">
+	    	<td colspan="4" style="text-align: center"><span id="list_loading" style="line-height: 150px;height:150px;text-align: center;vertical-align: middle;">获取中...</span></td>
+	    </tr>
+	</table>
+</div>
+<script type="text/javascript">
+$(function(){
+	//$.ajaxSettings.async = false;
+	<%
+	local remote_addr = luci.http.getenv("REMOTE_ADDR") 
+	local mac = luci.sys.net.ip4mac(remote_addr) or ""
+	%>
+	//本机 mac 地址
+	var mac_local = "<%=mac%>".toUpperCase();
+	
+	//取最后一个
+	//wifi/get_status_list 
+	var request_date = {}; 
+	//$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_status_list")%>",request_date,function(rsp) {
+	
+		if(top.global_wifi_status == '1'){
+			//取最后一个
+			//var dev_index = rsp.device_status.length-1;
+			var last_dev = top.global_wifi_device;//rsp.device_status[dev_index].device;
+			//wifi/view_detail 
+
+			//wifi/get_connected_devices_list 
+			var request_date = {"device":last_dev}; 
+			$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_connected_devices_list")%>",request_date,function(rsp) 
+			{ 
+				var d_mac;
+				var d_signal;
+				var d_ip;
+				var d_name;
+				var d_config;
+				var d_html = "";
+				var d_signal_level = 3;
+				var t_mac;
+				if(rsp.code == 0){
+					var device_list = rsp.connected_devices;
+					
+					//获取对应名称 ip name
+					//network/get_dhcp_device_list 
+					var request_date = {}; 
+					$.getJSON("<%=luci.dispatcher.build_url("api", "network","get_dhcp_device_list")%>",request_date,function(rsp) 
+					{ 
+						var dhcp_device_list = rsp.devices;
+						
+						for(i=0;i<device_list.length;i++){
+							
+							d_name = "未知";
+							d_ip = "未知";
+							d_config = "";
+							d_stat = "未知";
+							
+							d_mac = device_list[i].mac.toUpperCase();
+							d_signal = device_list[i].signal;
+							
+							if(device_list[i].ip){d_ip = device_list[i].ip;}
+							
+							d_signal_level = Math.floor(d_signal/20);
+							if(d_signal_level>4){d_signal_level=4}
+							
+							for(j=0;j<dhcp_device_list.length;j++){
+								t_mac = dhcp_device_list[j].mac.toUpperCase();
+								if (t_mac == d_mac){
+									d_name = dhcp_device_list[j].name;
+									if (d_name==""){d_name="未知";}
+									if (d_ip == "未知"){d_ip = dhcp_device_list[j].ip};
+								}
+							}
+							var mac_local_style = ""
+							if(mac_local==d_mac){
+								mac_local_style = "style='font-weight: bold'";
+							}
+							d_html += '<tr>'+
+								'<td class="mac" '+mac_local_style+'>'+d_mac+'</td>'+
+								'<td class="ip" '+mac_local_style+'>'+d_ip+'</td>'+
+								'<td class="name">'+d_name+'</td>'+
+								'<td class="signal"><span><img src="<%=resource%>/web/images/signal'+d_signal_level+'.png"></span></td>'+
+								'</tr>';
+						}
+						if(d_html==''){
+							$('#list_loading').html('暂无设备接入无线网络. <a href="javascript:location.reload();">刷新</a>');
+						}else{
+							$('#loading').hide();
+							$("#device_list").append(d_html);	
+						}
+						
+					})
+					
+				}else{
+					$('#list_loading').html('数据获取错误');
+				}
+			})
+		} else {
+			$('#list_loading').html('无线设备未启动.');
+		}
+	
+});
+</script>
+</body>
+</html>

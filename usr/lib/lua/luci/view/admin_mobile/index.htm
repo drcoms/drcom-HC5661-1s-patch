@@ -1,0 +1,342 @@
+<%
+
+	local ver  = require "luci.version"
+	local disp = require "luci.dispatcher"
+	local remote_addr = luci.http.getenv("REMOTE_ADDR")
+	local remote_mac = luci.sys.net.ip4mac(remote_addr) or ""
+	
+ 	local board_type = luci.util.get_sys_board()
+ 	local tw = require "tw"
+ 	local wifi_status,wifi_device,wifi_ifname,wifi_ssid,wifi_encryption,wifi_channel,wifi_mode = luci.util.get_wifi_device_status()
+ 	
+ 	local wan_ip = tw.get_wan_ip()
+	if wan_ip == nil then wan_ip = "" end
+	
+	math.randomseed(os.time())
+	local random = math.random()
+	
+	local clinet_bind = luci.http.formvalue("clinet_bind")
+	local guide_mode = luci.http.formvalue("guide_mode")
+	
+	local net = require "hiwifi.net"
+	local bridge_html = ""
+	if net.get_wifi_bridge() then
+		bridge_html  = "无线中继 "
+	end
+-%>	
+<%+header%>
+<%if clinet_bind == "1" or clinet_bind == 1 then%>
+<script type="text/javascript">
+<!--
+location.href = "<%=luci.dispatcher.build_url('admin_mobile','clinet_bind')%>?<%=random%>";
+//-->
+</script>
+验证通过跳转中...
+<% 
+luci.http.close();
+end %>
+
+<%if guide_mode == "1" or guide_mode == 1 then%>
+<script type="text/javascript">
+<!--
+location.href = "<%=luci.dispatcher.build_url('admin_mobile','guide_net')%>?<%=random%>";
+//-->
+</script>
+跳转中...
+<% 
+luci.http.close();
+end %>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+<!--  内容开始 -->
+<div data-role="" class="link_status" id="drcom_box">
+	<ul data-role="listview" data-divider-theme="b" data-inset="true">
+		<li data-theme="c"> 
+			<a href="javascript:void();" id="set_drcom" target="_blank" data-transition="slide" style="height:80px;"> <img id="drcom_img" src="<%=resource%>/mobile/image/cloud.png" style="padding:10px">
+			<div class="title">DrCOM</div>
+			<div class="info">获取信息中，请等待……</div>
+			</a>
+		</li>
+	</ul>
+</div>
+<div data-role="" class="link_status" id="link_box">
+	<ul data-role="listview" data-divider-theme="b" data-inset="true">
+		<li data-theme="c">
+			<a href="<%=luci.dispatcher.build_url('admin_mobile','info')%>?<%=random%>" data-transition="slide" style="height:80px;"> <img id="link_img" src="<%=resource%>/mobile/image/link.png" style="padding:10px"> 
+			<div class="title">系统状态</div>
+			<div class="info">
+			硬件版本: <%=board_type%><br>
+			软件版本: <% luci.http.write(tw.get_version():match("^([^%s]+)")) %><br/>
+			开机时长: <span id="uptime"></span>
+			</div>
+			</a>
+		</li>
+	</ul>
+</div>
+<div data-role="" class="link_status" id="inter_box">
+	<ul data-role="listview" data-divider-theme="b" data-inset="true">
+		<li data-theme="c">
+			<a href="<%=luci.dispatcher.build_url('admin_mobile','network')%>?<%=random%>" data-transition="slide" style="height:80px;"> <img id="inter_img" src="<%=resource%>/mobile/image/inter.png" style="padding:10px;"> 
+			<div class="title">外网设置</div>
+			<div class="info">当前连接设备</div>
+			</a>
+		</li>
+	</ul>
+</div>
+<div data-role="" class="link_status" id="wifi_box">
+	<ul data-role="listview" data-divider-theme="b" data-inset="true">
+		<li data-theme="c"> 
+			<a href="<%=luci.dispatcher.build_url('admin_mobile','wifi')%>?<%=random%>" data-transition="slide" style="height:80px;"> <img id="wifi_img" src="<%=resource%>/mobile/image/wifi.png" style="padding:10px">
+			<div class="title">无线设置</div>
+			<div class="info">开放</div></a> </li>
+	</ul>
+</div>
+
+<div data-role="" class="link_status" id="led_box">
+	<ul data-role="listview" data-divider-theme="b" data-inset="true">
+		<li data-theme="c" data-icon="star"> 
+			<a href="javascript:void();" id="set_led" style="height:20px;min-height:10px;">
+			<img id="led_img" src="<%=resource%>/mobile/image/light.png" height="30" style="padding:5px 10px 10px 35px">
+			<div class="title">路由器面板灯 </div></a>
+		</li>
+	</ul>
+</div>
+<div data-role="" class="link_status" id="txp_box">
+	<ul data-role="listview" data-divider-theme="b" data-inset="true">
+		<li data-theme="c" data-icon="star"> 
+			<a href="javascript:void();" id="set_txp" style="height:20px;min-height:10px;">
+			<img id="txp_img" src="<%=resource%>/mobile/image/txp140_2.png" height="27" style="padding:5px 10px 10px 35px">
+			<div class="title">无线穿墙模式 </div></a>
+		</li>
+	</ul>
+</div>
+<script type="text/javascript">//<![CDATA[
+    var global_wifi_ssid = "";
+	function millisecondToHour(time){
+		return parseInt(time / 3600.0) + i18_hour + parseInt((parseFloat(time / 3600.0) -
+					parseInt(time / 3600.0)) * 60) + i18_minute +
+					parseInt((parseFloat((parseFloat(time / 3600.0) - parseInt(time / 3600.0)) * 60) -
+					parseInt((parseFloat(time / 3600.0) - parseInt(time / 3600.0)) * 60)) * 60) + i18_second;
+	}
+	
+	function millisecondToDate(msd) {
+			var time = parseFloat(msd);
+			if (time != null && time != "") {
+				if (time > 60 && time < 60 * 60) {
+					time = parseInt(time / 60.0) + i18_minute + parseInt((parseFloat(time / 60.0) -
+						parseInt(time / 60.0)) * 60) + i18_second;
+				}
+				else if (time >= 60 * 60 && time < 60 * 60 * 24) {
+					time = millisecondToHour(time);
+				}else if (time >= 24* 60 * 60 ) {
+					var day = parseInt(time  / (3600.0 * 24) );
+					time = time - (day * 3600 * 24);
+					time =  day + i18_day + millisecondToHour(time);
+				}
+				else {
+					time = parseInt(time) + i18_second;
+				}
+			}
+			return time;
+	}
+	function check_led_info(){
+		//system/get_led_status 
+		$("#led_loading").show();
+		$("#led_box .title").html('路由器面板灯  <img  id="led_loading" src="/turbo-static/turbo/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器">');
+		
+		var request_date = {}; 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "system","get_led_status")%>",request_date,function(rsp) 
+		{ 
+			$("#led_loading").hide();
+			if (rsp.status == 1){
+				$("#set_led").attr("title",1);
+				$("#led_img").attr("src","<%=resource%>/mobile/image/light.png");
+				$("#led_box .title").html("路由器面板灯 (已开启)");
+			} else {
+				$("#set_led").attr("title",0);
+				$("#led_img").attr("src","<%=resource%>/mobile/image/light2.png");
+				$("#led_box .title").html("路由器面板灯 <span style='color:red'>(已关闭)</span>");
+			}
+			
+			//system/set_led_status 
+			$("#set_led").click(function(){
+				set_led_status();
+			})
+		})
+	}
+	
+	function set_led_status(){
+		$("#led_box .title").html('路由器面板灯  <img  id="led_loading" src="/turbo-static/turbo/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器">');
+		var status_now = $("#set_led").attr("title");
+		if(status_now == "1"){
+			var request_date = {"status":0}; 
+		} else {
+			var request_date = {"status":1}; 
+		}
+		
+		$.getJSON("<%=luci.dispatcher.build_url("api", "system","set_led_status")%>",request_date,function(rsp) 
+		{ 
+			check_led_info();
+		})
+	}
+	
+	// drcom check
+		function check_drcom(){
+    $("#drcom_box .title").html('DrCOM');
+    $("#drcom_box .info").html('获取DrCOM客户端状态中，请等待......');
+		var request_date = {}; 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "system","get_drcom_status")%>",request_date,function(rsp) 
+		{ 
+			if (rsp.status == 0){
+			  $.getJSON("<%=luci.dispatcher.build_url("api", "system","get_drcom_username")%>",request_date,function(rsp2) 
+        { 
+             $("#drcom_box .info").html("DrCOM上网客户端运行正常<br/>当前账号:" + rsp2.username + "<br/><span style='color:blue'>点击重启客户端</span>");
+        })
+       
+			} else {
+        $("#drcom_box #drcom_img").attr('src','<%=resource%>/mobile/image/cloud2.png');
+				$("#drcom_box .info").html("<span style='color:red'>客户端已掉线</span>");
+			}
+			
+			//system/set_drcom_status
+			$("#set_drcom").click(function(){
+				set_drcom_status();
+			})
+		})
+	}
+	
+	function set_drcom_status(){
+		$("#drcom_box .info").html("正在<span style='color:red'>重新启动</span>DrCOM客户端，请稍后...");
+    var request_date = {}; 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "system","set_drcom_status")%>",request_date,function(rsp) 
+		{ 
+      art.dialog({icon:"succeed",title:false,content:"启动成功! <br/>五秒后本窗口自动消失"}).lock().time(5);
+			setTimeout("check_drcom()",5000);
+		})
+	}
+	
+	
+	function set_txp_status(){
+		$.mobile.showPageLoadingMsg( "e", "无线连接可能断开，请重新连接 "+global_wifi_ssid, true );
+		setTimeout('$.mobile.hidePageLoadingMsg();',2000);
+		$("#txp_box .title").html('无线穿墙模式  <img  id="led_loading" src="/turbo-static/turbo/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器">');
+		var status_now = $("#set_txp").attr("title");
+		if(status_now == "1"){
+			var request_date = {"txpwr":"max","device":"radio0.network1"}; 
+		} else {
+			var request_date = {"txpwr":"140","device":"radio0.network1"}; 
+		}
+		
+		$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","set_txpwr")%>",request_date,function(rsp) 
+		{ 
+			check_txp_info();
+		})
+	}
+	
+	function check_txp_info(){
+		//system/get_txp_status 
+		$("#txp_loading").show();
+		$("#txp_box .title").html('无线穿墙模式  <img  id="txp_loading" src="/turbo-static/turbo/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器">');
+		var request_date = {"device":"radio0.network1"}; 
+		$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_txpwr")%>",request_date,function(rsp) 
+		{ 
+			$("#txp_loading").hide();
+			if (rsp.txpwr == "140"){
+				$("#set_txp").attr("title",1);
+				$("#txp_img").attr("src","<%=resource%>/mobile/image/txp140.png");
+				$("#txp_box .title").html("无线穿墙模式 (已开启)");
+			} else {
+				$("#set_txp").attr("title",0);
+				$("#txp_img").attr("src","<%=resource%>/mobile/image/txp140_2.png");
+				$("#txp_box .title").html("无线穿墙模式 (已关闭)");
+			}
+			
+			//system/set_txp_status 
+			$("#set_txp").click(function(){
+				set_txp_status();
+			})
+		})
+	}
+	
+	$(function(){
+		check_led_info();
+		check_drcom();
+		check_txp_info();
+		var uptime = <%=luci.util.get_uptime()%>;
+		$("#uptime").html(millisecondToHour(uptime));
+		var wan_ip = '<%=wan_ip%>';
+		
+		// 2.11 wan获取 互联网状态
+		var is_wan_up = '<%=luci.util.is_internet_connect()%>';
+		if(is_wan_up=='')is_wan_up=false;
+		if(is_wan_up){
+			$("#inter_img").attr("src","<%=resource%>/mobile/image/inter.png");
+			$.getJSON("<%=luci.dispatcher.build_url("api", "network","get_wan_info")%>",{},function(rsp) {
+				if(rsp.code != 0){
+					html = html+"获取数据失败<br>";
+					$("#inter_box .info").html(html);
+					return;
+				}
+				var html = "";
+				html = html+"联网方式: <%=bridge_html%>"+rsp.type.toUpperCase()+" <br>";
+				html = html+"MAC地址: "+rsp.mac.toUpperCase()+" <br>";
+				html = html+"连接时长: "+millisecondToHour(rsp.uptime)+" <br>";
+				$("#inter_box .info").html(html);
+			});
+			
+		}else{
+			$("#inter_status").toggleClass();
+			$("#inter_status").addClass("bad");
+			
+			$("#inter_box .info").html("<%:网络已经断开，点击设置%>");
+			$("#inter_box .info").addClass("error");
+			$("#inter_img").attr("src","<%=resource%>/mobile/image/inter2.png");
+		}
+		
+		
+		var wifi_status = '<%=wifi_status%>';
+		var wifi_ssid = '<%=wifi_ssid%>';
+		global_wifi_ssid = wifi_ssid;
+		var wifi_device = '<%=wifi_device%>';
+		var wifi_encryption	= '<%=wifi_encryption%>';
+		var wifi_channel = '<%=wifi_channel%>';
+		if(wifi_status=='1'){
+			$("#wifi_img").attr("src","<%=resource%>/mobile/image/wifi.png");
+			var html = "";
+			html = html+"网络名称: "+wifi_ssid+" <br>";
+			if(wifi_encryption==''||wifi_encryption=='none'){
+				html = html+"安全类型: 无加密<br>";
+			}else if(wifi_encryption == "mixed-psk+aes" || wifi_encryption == "mixed-psk"){
+				html = html+"安全类型: 强加密(WPA/WPA2个人版)<br>";
+			}
+			if(wifi_channel=='0'){
+				//wifi/get_channel 
+				html = html+"无线信道: <span id=\"wifi_channel\">获取中...</a><br>";
+				var request_date = {"device":wifi_device}; 
+				$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_channel")%>",request_date,function(rsp) 
+				{ 
+					if (rsp.channel){
+						if(rsp.channel == "" || rsp.channel == "0"){
+							$("#wifi_channel").html(rsp.channel_autoreal+"（自动选择）");
+						} else {
+							$("#wifi_channel").html(rsp.channel+"（手动选择）");
+						}
+					}else{
+						$("#wifi_channel").html("获取失败");
+					}
+				});
+			}else{
+				html = html+"无线信道: "+wifi_channel+"（手动选择）<br>";	
+			}
+			$("#wifi_box .info").html(html);
+		}else{
+			$("#wifi_status").toggleClass();
+			$("#wifi_status").addClass("bad");
+			$("#wifi_box .info").html("<%:已关闭%>");
+			$("#wifi_box .info").addClass("error");
+			$("#wifi_img").attr("src","<%=resource%>/mobile/image/wifi2.png");
+		}
+		
+	});
+//]]></script>
+<%+footer%>

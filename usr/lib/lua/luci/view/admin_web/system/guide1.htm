@@ -1,0 +1,823 @@
+<%
+local ver  = require "luci.version"
+local s = require "luci.tools.status"
+local util  = require "luci.util"
+local deviceReq = "radio0.network1"
+local http = require "luci.http"
+local protocol = require "luci.http.protocol"
+local tw = require "tw"
+local n = require "luci.controller.api.network"
+	
+local resultResp,ipv4Resp,ipv6Resp,statusResp,gate_wayResp,dns_ipResp,macResp,uptimeResp,mtuResp,wan_mac
+local typeResp,mobile_typeResp,mobile_dev_usbResp,pppoe_nameResp,pppoe_passwdResp,static_ipResp,static_gwResp,static_dnsResp,static_dns2Resp,static_maskResp,macaddrResp,peerdnsResp,override_dnsResp,override_dns2Resp
+	
+
+-- 打开一次
+local guide_tag= ver.guide_tag
+local appguidefile = "/etc/app/guide_cache"
+fd = io.open(appguidefile, "w")
+fd:write(guide_tag)
+fd:close()
+
+	local sub_action = luci.http.formvalue("sub_action")
+
+	local codeResp_set
+	local msgResp_set
+	local codeResp_set_wifi
+	local msgResp_set_wifi
+	
+	local ssidResp 
+	local encryptionResp 
+	local wifi_keyResp
+	
+	local codeResp = 0
+	local msgResp = "" 
+	local codeResp_wifi = 0
+	local msgResp_wifi = "" 
+	
+	if sub_action == "1" then
+		--------------
+		-- wifi 设置 (wifi set_base)
+		--------------
+		
+		
+		local ssidReq = luci.http.formvalue("ssid")
+		local keyReq = luci.http.formvalue("key")
+		local encryptionReq = luci.http.formvalue("encryption")	
+		local hiddenReq = luci.http.formvalue("hidden")
+		
+		ssidResp = ssidReq
+		encryptionResp = encryptionReq
+		wifi_keyResp = keyReq
+	
+		-- 返回值
+		codeResp_set_wifi = 0
+		msgResp_set_wifi = ""
+		
+		-- TODO 
+		-- wep-open 必须为 13位
+		-- psk psk2 形式需要 8位 到 63 位
+		
+		--插入运算代码
+		local netmd = require "luci.model.network".init()
+		local net = netmd:get_wifinet(deviceReq)
+		local req_ok = true
+		
+		if net then
+			
+			-- 关闭  wifi
+			
+			-- 判断参数是否正常
+			if (ssidReq == nil or ssidReq == "") then 
+				req_ok = false
+				codeResp_set_wifi = 311
+			end
+			
+			if (ssidReq:len()>32) then 
+				req_ok = false
+				codeResp_set_wifi = 312
+			end
+	
+			-- 判断参数是否正常
+			if (ssidReq == nil or ssidReq == "") and (encryptionReq == nil or encryptionReq == "") and (keyReq == nil or keyReq == "") then 
+				req_ok = false
+				codeResp_set_wifi = 310
+			end
+			
+			-- 判断 encryption 参数是否合法
+			--if encryptionReq ~= nil and encryptionReq ~= "none" and encryptionReq ~= "psk" and encryptionReq ~= "psk2" and encryptionReq ~= "wep-open" then
+			if encryptionReq ~= nil and encryptionReq ~= "none" and encryptionReq ~= "mixed-psk" then
+				req_ok = false
+				codeResp_set_wifi = 402
+			end
+			
+			-- 判断 key 参数是否合法
+			if encryptionReq ~= nil then
+			
+				if encryptionReq == "psk" or encryptionReq == "psk2" then
+					if  keyReq:len()<8 then 
+						req_ok = false
+						codeResp_set_wifi = 403
+					end
+	
+				elseif encryptionReq == "mixed-psk" then
+					if  keyReq:len()<8 or keyReq:len()>63 then 
+						req_ok = false
+						codeResp_set_wifi = 405
+					end
+				elseif encryptionReq == "wep-open" then
+					if  keyReq:len()~=5 and keyReq:len()~=13 then 
+						req_ok = false
+						codeResp_set_wifi = 404
+					end
+				end
+			end
+			
+			if keyReq:len()>0 and encryptionReq == "none" then
+				req_ok = false
+				codeResp_set_wifi = 406
+			end
+			
+			if req_ok==true then 	--请求正常
+			
+				msgResp_set_wifi = ssidReq
+				
+				-- 开始 set 动作
+				if ssidReq~=nil and ssidReq~="" then 
+					net:set("ssid",ssidReq) 
+				end 
+				
+				if keyReq~=nil then
+					net:set("encryption",encryptionReq)
+					net:set("key",keyReq)
+					if encryptionReq=="none" then
+						net:set("key","")
+					elseif encryptionReq=="wep-open" then
+						net:set("key1","s:"..keyReq)
+						net:set("key",1)
+					end 
+				end
+				
+				if hiddenReq == "1" then
+					net:set("hidden","enable")
+				else 
+					net:set("hidden",nil)
+				end
+			
+				netmd:commit("wireless")
+				netmd:save("wireless")
+				
+			end
+		else 
+			codeResp_set_wifi = 401
+		end 
+		
+		-- 返回值及错误处理
+		if (codeResp_set_wifi == 0) then 		
+			-- 重启放在下一页
+		else 
+			msgResp_set_wifi = luci.util.get_api_error(codeResp_set_wifi)
+		end
+		
+		--------------
+		-- 网络设置 (network get_wan_info)
+		--------------
+
+		-- 参数
+	
+		local typeReq = luci.http.formvalue("type")
+		local pppoe_nameReq = luci.http.formvalue("pppoe_name")
+		local pppoe_passwdReq = luci.http.formvalue("pppoe_passwd")
+		local static_ipReq = luci.http.formvalue("static_ip")
+		local static_maskReq = luci.http.formvalue("static_mask")
+		local static_gwReq = luci.http.formvalue("static_gw")
+		local static_dnsReq = luci.http.formvalue("static_dns")
+		local static_dns2Req = luci.http.formvalue("static_dns2")
+		local special_dialReq = luci.http.formvalue("special_dial")
+		
+		typeResp = typeReq
+		pppoe_nameResp = pppoe_nameReq
+		pppoe_passwdResp = pppoe_passwdReq
+		static_ipResp = static_ipReq
+		static_gwResp = static_gwReq
+		static_dnsResp = static_dnsReq
+		static_dns2Resp = static_dns2Req
+		static_maskResp = static_maskReq
+						
+		-- 插入运算代码
+		
+		local tnetwork = require "luci.model.tnetwork".init()
+		local tnetwork_defaults = tnetwork:get_defaults()
+		local uci = require "luci.model.uci"
+		_uci_real  = uci.cursor()
+	
+		if typeReq == "pppoe" then		-- adsl 账号
+		
+			if pppoe_nameReq ~= "" and pppoe_nameReq ~= nil and pppoe_passwdReq ~= nil  and pppoe_passwdReq ~= nil then 
+				tnetwork_defaults:set("pppoe_name",pppoe_nameReq)
+				tnetwork_defaults:set("pppoe_passwd",pppoe_passwdReq)
+				tnetwork_defaults:set("ifname",s.global_wan_ifname())
+				
+				--特殊拨号
+				codeResp_set = n.proc_pppoe(pppoe_nameReq,pppoe_passwdReq,override_dnsReq,override_dns2Req,peerdnsReq)
+
+				if special_dialReq == "1" then
+					_uci_real:set("network", "wan", "special_dial", "1")
+				else
+					_uci_real:delete("network", "wan", "special_dial")
+				end
+				_uci_real:save("network")
+				_uci_real:load("network")
+				_uci_real:commit("network")
+				_uci_real:load("network")
+				
+			else 
+				codeResp_set = 518
+			end
+			
+		elseif typeReq == "dhcp" then		-- dhcp 上链
+		
+			tnetwork_defaults:set("ip_type",typeReq)
+			tnetwork_defaults:set("peerdns",peerdnsReq)
+			tnetwork_defaults:set("override_dns",override_dnsReq)
+			tnetwork_defaults:set("override_dns2",override_dns2Req)
+	
+			codeResp_set = n.proc_ip(typeReq,nil,nil,nil,override_dnsReq,override_dns2Req,peerdnsReq)
+			
+			_uci_real:delete("network", "wan", "special_dial")
+			_uci_real:save("network")
+			_uci_real:load("network")
+			_uci_real:commit("network")
+			_uci_real:load("network")
+			
+		elseif typeReq == "static" then		-- 静态 ip 账号
+		
+			local datatypes = require "luci.cbi.datatypes"	
+			local interface = "lan"
+			local wanipnl
+			local wanmasknl
+			
+			--判断是否在一个 ip 段
+			local bit = require "bit"
+			_,lanipv4 = luci.util.get_lan_wan_info(interface)
+			local iptool = luci.ip
+			
+			if static_ipReq and static_maskReq then 
+				wanipnl = iptool.iptonl(static_ipReq)
+				wanmasknl = iptool.iptonl(static_maskReq)
+			end
+			
+			if not datatypes.ipaddr(static_ipReq) then
+				codeResp_set = 512
+			elseif not datatypes.ipaddr(static_gwReq) then 
+				codeResp_set = 520	
+			elseif not datatypes.ipaddr(static_dnsReq) then 
+				codeResp_set = 519
+			elseif not datatypes.ipaddr(static_maskReq) then 
+				codeResp_set = 513
+			elseif not (bit.band(iptool.iptonl(static_ipReq),iptool.iptonl(static_maskReq)) ~= bit.band(iptool.iptonl(lanipv4[1]['ip']),iptool.iptonl(static_maskReq)) and bit.band(iptool.iptonl(static_ipReq),iptool.iptonl(lanipv4[1]['mask'])) ~= bit.band(iptool.iptonl(lanipv4[1]['ip']),iptool.iptonl(lanipv4[1]['mask']))) then 
+				-- (WANIP & WANMASK != LANIP & WANMASK) && (WANIP & LANMASK != LANIP & LANMASK)
+				codeResp_set = 533
+			elseif not ((wanipnl >= iptool.iptonl("1.0.0.0") and wanipnl <= iptool.iptonl("126.255.255.255")) or (wanipnl >= iptool.iptonl("128.0.0.0") and wanipnl <= iptool.iptonl("223.255.255.255"))) then 
+				codeResp_set = 534
+			elseif not (bit.band(wanipnl,iptool.ipnot(static_maskReq)) ~= 0 and bit.band(wanipnl,iptool.ipnot(static_maskReq)) ~= iptool.ipnot(static_maskReq)) then 
+				-- ip & (~mask)不能为0，且ip & (~mask)不能为(~mask)
+				codeResp_set = 535
+			else 
+				tnetwork_defaults:set("ip_type",typeReq)
+				tnetwork_defaults:set("static_ip",static_ipReq)
+				tnetwork_defaults:set("static_gw",static_gwReq)
+				tnetwork_defaults:set("static_dns",static_dnsReq)
+				tnetwork_defaults:set("static_dns2",static_dns2Req)
+				tnetwork_defaults:set("static_mask",static_maskReq)				
+				codeResp_set = n.proc_ip(typeReq,static_ipReq,static_maskReq,static_gwReq,static_dnsReq,static_dns2Req)
+			end
+			
+			_uci_real:delete("network", "wan", "special_dial")
+			_uci_real:save("network")
+			_uci_real:load("network")
+			_uci_real:commit("network")
+			_uci_real:load("network")
+		else 
+			codeResp_set = 514
+		end 
+	
+		-- 返回值及错误处理
+		if (codeResp_set == 0) then 
+			tnetwork_defaults:set("selected",typeReq)
+			tnetwork:commit("tnetwork")
+			tnetwork:save("tnetwork")
+			
+			-- 删除桥接
+			local net = require "hiwifi.net"
+			net.del_wifi_bridge()
+					
+		else 
+			msgResp_set = luci.util.get_api_error(codeResp_set)
+		end
+		
+		-- 重启放在下一页
+		
+		os.execute("ifup wan")
+		
+		if typeReq == "static" then
+			-- TODO: 执行一次 cat /tmp/resolv.conf.auto  为空， 无 DNS
+			os.execute("ifup wan")
+		end
+		
+		-- 只在不是 桥接的时候执行
+		os.execute("killall wisp_chk.sh 1>/dev/null 2>1")
+		os.execute("ubus call network reload")
+	
+	else
+	
+		--------------
+		-- wifi 信息  (wifi view_detail)
+		--------------
+		
+		codeResp_wifi = 0
+		msgResp_wifi = ""
+		
+		--插入运算代码
+		-- 1 -----------------------------------------------------
+		local s    = require "luci.tools.status"
+		local rv   = { }
+	
+		local dev
+		
+		for dev in deviceReq:gmatch("[%w%.%-]+") do
+			rv[#rv+1] = s.wifi_network(dev)
+		end
+	
+		if #rv > 0 then
+			ssidResp = rv[1]['ssid']
+			channelResp = rv[1]['channel']
+			if(rv[1]['up']) then
+				statusResp = 1
+			else 
+				statusResp = 0
+			end
+			speedResp = rv[1]['bitrate']
+			encryptionResp = rv[1]['encryption']
+			
+			modeResp = rv[1]["mode"]
+			encryptionResp = rv[1]["encryption_src"]
+			hiddenResp = rv[1]["hidden"]
+			wifi_keyResp = rv[1]["key"]
+	
+			signalResp  =  rv[1]["signal"]
+			qualityResp =  rv[1]["quality"]
+			deviceResp = deviceReq			
+			if encryptionResp == "wep-open" then
+				wifi_keyResp = rv[1]["key1"]
+				if wifi_keyResp:len()>4 and wifi_keyResp:sub(0,2)=="s:" then
+					wifi_keyResp = wifi_keyResp:sub(3)
+				end
+			end
+		else 
+			codeResp_wifi = 401
+		end
+		
+		-- 返回值及错误处理
+		if (codeResp_wifi == 0) then 
+
+		else 
+			msgResp_wifi = luci.util.get_api_error(codeResp_wifi)
+		end
+			
+			
+			
+		--------------
+		-- 网络设置  network set_wan_connect
+		--------------
+			-- 自动类型
+			autowantypeResp = luci.util.get_auto_wan_type_code()
+		
+			-- 现状态
+			local interface = "wan"
+			resultResp,ipv4Resp,ipv6Resp,statusResp,gate_wayResp,dns_ipResp,macResp,uptimeResp,mtuResp,wan_mac = util.get_lan_wan_info(interface)
+			if resultResp ~= false then
+				typeResp,mobile_typeResp,mobile_dev_usbResp,pppoe_nameResp,pppoe_passwdResp,static_ipResp,static_gwResp,static_dnsResp,static_dns2Resp,static_maskResp,macaddrResp,peerdnsResp,override_dnsResp,override_dns2Resp = util.get_wan_contact_info()
+			else 
+				codeResp = 511
+			end
+	end
+	
+--------------	
+-- 可选项
+--------------
+local option_wifi_encryption = {
+	{k="none",v="无加密"},
+	{k="mixed-psk",v="强加密(WPA/WPA2个人版)"}
+}
+
+--------------	
+-- 可选项
+--------------
+local option_type= {
+	{k="pppoe",v="宽带拨号(PPPoE)"},
+	{k="dhcp",v="自动方式 (DHCP)"},
+	{k="static",v="手动方式 (静态IP)"}
+}
+
+-- step go
+if codeResp_set == 0 and codeResp_set_wifi == 0 then
+	local msgResp_set_wifi_encode = protocol.urlencode(msgResp_set_wifi)
+	local wifi_key_show
+	if keyReq ~="" and keyReq then 
+		wifi_key_show = keyReq
+	else 
+		wifi_key_show = "无"
+	end
+	luci.http.redirect(luci.dispatcher.build_url("admin_web", "system","guide3").."?ssid="..msgResp_set_wifi_encode.."&net_type="..typeResp.."&ssid_pass="..wifi_key_show)
+end
+%>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<title>极路由 一键设置</title>
+<link rel="shortcut icon" href="/favicon.ico">
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<link rel="stylesheet" href="<%=resource%>/web/css/guide/style.css?v=<%=ver.svnRevNum%>" type="text/css">
+<style type="text/css">
+.control-group{
+padding-left:200px;
+}
+</style>
+</head>
+<body>
+<div id="wrap">
+<div id="header">
+	<h1>一键设置</h1>
+	<!-- 
+	<div id="step-bar">
+		<ol>
+			<li id="st" class="step-button current"><span class="no">①</span><span class="text">无线设置</span><span class="checked"></span></li>
+			<li id="nd" class="step-button"><span class="no">②</span><span class="text">外网设置</span><span class="checked"></span></li>
+			<li id="rd" class="step-button"><span class="no">③</span><span class="text">云插件管理</span><span class="checked"></span></li>
+		</ol>
+	</div>
+	 -->
+</div>
+<div id="main">
+
+<form class="form-horizontal" action="<%=luci.dispatcher.build_url("admin_web", "system","guide1")%>" method="post" onSubmit="return check_form(this);">
+<!-- 
+状态
+ -->
+ 
+<div class="slide" id="status" style="display:none;padding-bottom:0px;">
+	<h2>状态</h2>
+	<div class="control-group" id="nolink" style="margin:0px;display:none;">
+		<img alt="网线未插" src="<%=resource%>/web/images/linketh.gif" border="0">
+		<p style="padding: 10px 0 0 50px; color:red; ">请将外网网线插入蓝色的  "WAN" 口。</p>
+	</div>
+	<div class="control-group" id="havconn" style="margin:0px;display:none;">
+		<img alt="" src="<%=resource%>/web/js/artDialog/skins/icons/succeed.png" border="0">已经联通互联网 &nbsp&nbsp&nbsp&nbsp&nbsp  <a href="<%=luci.dispatcher.build_url("admin_web", "system","guide_online")%>">立即上网 .</a><span style="display:none;">,	将自动跳转... 5秒 <input type="button" value="不跳转,我要继续设置"></span>
+	</div>
+</div>
+
+<!-- 
+ 外网设置
+-->
+	<div class="slide" id="step2" style="padding-bottom:0px;">
+		<span id="etherror" style="display:none;"></span>
+		<h2><span class="ps">请选择您的上网接入方式</span>外网设置</h2>
+			<div class="control-group">
+				<label class="control-label">上网接入方式 </label>
+				<div class="controls">
+					<select name="type">
+						<%
+                       	for i,v in ipairs(option_type) do
+                       	%>
+						<option value="<%=v['k']%>" <%if v['k']==typeResp then%>selected="selected"<%end%>><%=v['v']%></option>
+						<%
+                       	end 
+                       	%>
+					</select>
+				</div>
+			</div>
+			<!-- 手动方式 -->
+			<div class="control-group static_box" style="display:none;">
+				<!-- error -->
+				<label class="control-label">IP 地址</label>
+				<div class="controls static_box">
+					<input type="text" name="static_ip" id="" value="<%=static_ipResp%>" placeholder="0.0.0.0" class="txt">
+					<!-- <span class="help-inline">这里是错误提示</span> -->
+				</div>
+			</div>
+			<div class="control-group static_box" style="display:none;">
+				<label class="control-label">子网掩码</label>
+				<div class="controls">
+					<input type="text" name="static_mask" id="" value="<%=static_maskResp%>" placeholder="0.0.0.0" class="txt">
+				</div>
+			</div>
+			<div class="control-group static_box" style="display:none;">
+				<label class="control-label">网关</label>
+				<div class="controls">
+					<input type="text" name="static_gw" id="" value="<%=static_gwResp%>" placeholder="0.0.0.0" class="txt">
+				</div>
+			</div>
+			<div class="control-group static_box" style="display:none;">
+				<label class="control-label">首选DNS地址</label>
+				<div class="controls">
+					<input type="text" name="static_dns" id="" value="<%=static_dnsResp%>" placeholder="0.0.0.0" class="txt">
+				</div>
+			</div>
+			<div class="control-group static_box" style="display:none;">
+				<label class="control-label">备用DNS地址</label>
+				<div class="controls">
+					<input type="text" name="static_dns2" id="" value="<%=static_dns2Resp%>" placeholder="0.0.0.0" class="txt">
+				</div>
+			</div>
+			<!-- /手动方式 -->
+			<div class="control-group pppoe_box" style="display:none;">
+				<label class="control-label">帐号</label>
+				<div class="controls">
+					<input type="text" name="pppoe_name" id="" value="<%=pppoe_nameResp%>" autocomplete="off" class="txt" />
+				</div>
+			</div>
+			<div class="control-group pppoe_box" style="display:none;">
+				<label class="control-label">密码</label>
+				<div class="controls">
+					<input type="password" name="pppoe_passwd" value="<%=pppoe_passwdResp%>" id="input_password1_ppp" class="txt" autocomplete="off">
+					<input type="text" id="input_password2_ppp" value="<%=pppoe_passwdResp%>" class="txt" name="key_show_ppp" style="display:none;" />
+					<input type="hidden" id="sub_action" value="1" class="txt" name="sub_action" />
+					<label class="checkbox inline" for="pwdshow_ppp">
+					<input type="checkbox" id="pwdshow_ppp" value="true" autocomplete="off">
+					显示</label>
+				</div>
+			</div>
+			<script type="text/javascript">//<![CDATA[
+				    $(function(){
+				    	$("#pwdshow_ppp").click(function(){
+				    		if($(this).attr('checked')){
+				    			$("#input_password2_ppp").val($("#input_password1_ppp").val());
+				    			$("#input_password1_ppp").hide();
+				    			$("#input_password2_ppp").show();				
+				    		}else{
+				    			$("#input_password1_ppp").val($("#input_password2_ppp").val());
+				    			$("#input_password1_ppp").show();
+				    			$("#input_password2_ppp").hide();
+				    		}
+				    	});
+				    	$("#input_password2_ppp").blur(function(){
+				    		$("#input_password1_ppp").val($("#input_password2_ppp").val());
+				    	});
+				    });
+				//]]></script>
+			<div id="error_msg" style='color:red'></div>
+	</div>
+
+<!-- 
+无线网设置
+ -->
+ 
+	<div class="slide" id="step1" style="padding-bottom:0px;">
+		<h2><span class="ps">移动无线设备接入以下“网络名称”上网</span>无线网络设置</h2>
+			<div class="control-group">
+				<label class="control-label">网络名称</label>
+				<div class="controls">
+					<input type="text" name="ssid" value="<%=ssidResp%>" placeholder="SSID" class="txt" />
+				</div>
+			</div>
+			<div class="control-group">
+				<label class="control-label">安全类型</label>
+				<div class="controls">
+					<select name="encryption">
+						<%
+                        	for i,v in ipairs(option_wifi_encryption) do
+                        	%>
+						<option value="<%=v['k']%>" <%if v['k']==encryptionResp then%>selected="selected"<%end%>><%=v['v']%></option>
+						<%
+                        	end 
+                        	%>
+					</select>
+				</div>
+			</div>
+			<div class="control-group" id="password_box">
+				<label class="control-label">网络密码</label>
+				<div class="controls">
+					<input type="password" autocomplete="off" name="key" id="input_password1" value="<%=wifi_keyResp%>" class="txt" />
+					<input type="text" id="input_password2" value="<%=wifi_keyResp%>" class="txt" name="key_show" style="display:none;" />
+					<input type="hidden" id="password_cache" value="<%=wifi_keyResp%>" class="txt" name="key_cache" />
+					<label class="checkbox inline">
+					<input type="checkbox" id="pwdshow" value="true" />
+					显示</label>
+					<script type="text/javascript">//<![CDATA[
+					    $(function(){
+					    	$("#pwdshow").click(function(){
+					    		if($(this).attr('checked')){
+					    			$("#input_password2").val($("#input_password1").val());
+					    			$("#input_password1").hide();
+					    			$("#input_password2").show();				
+					    		}else{
+					    			$("#input_password1").val($("#input_password2").val());
+					    			$("#input_password1").show();
+					    			$("#input_password2").hide();
+					    		}
+					    	});
+					    	$("#input_password2").blur(function(){
+					    		$("#input_password1").val($("#input_password2").val());
+					    	});
+					    	//自动取消填写密码
+					    	$("select[name='encryption']").change(function(){
+					    		if($(this).val() == "none"){
+					    			var key_cache = $("input[name='key']").val();
+					    			$("input[name='key_cache']").val(key_cache);
+					    		 	$("input[name='key']").val("");
+					    			$("input[name='key_show']").val("");
+					    			$("#password_box").hide();
+					    		} else {
+					    			var key_cache = $("input[name='key_cache']").val();
+					    			var key = $("input[name='key']").val();
+					    			if (key != ""){key_cache = key;}
+					    		 	$("input[name='key']").val(key_cache);
+					    			$("input[name='key_show']").val(key_cache);
+					    			$("#password_box").show();
+					    		}
+					    	})
+					    });
+					//]]></script>
+				</div>
+			</div>
+			<div id="error_msg_wifi" style='color:red'></div>
+	</div>
+<!-- 
+保存
+ -->
+	<div class="slide" id="save">
+		<h2></h2>
+		<div class="control-group">
+			<label class="control-label"></label>
+			<div class="controls btn-toolbar">
+				<input type="submit" value="保存设置" class="btn" id="submit_btn">
+			</div>
+		</div>
+	</div>
+</form>
+	<div id="footer">
+		<p class="info"><span>系统版本：
+			<% http.write(util.get_sys_board()) %>
+			-
+			<% http.write(tw.get_version():match("^([^%s]+)")) %>
+			</span><span>MAC：
+			<%http.write(tw.get_mac())%>
+			</span><span>服务热线：40060-24680</span></p>
+		<p class="copyright">&copy 2014 极路由 版权所有</p>
+	</div>
+</div>
+<script type="text/javascript">
+<%if codeResp_set_wifi and codeResp_set_wifi ~=0 then%>
+	$("#error_msg_wifi").html("<%=msgResp_set_wifi%>");
+<%end%>
+<% if codeResp_set and codeResp_set ~=0 then%>
+	$("#error_msg").html("<%=msgResp_set%>");
+<%end%>
+</script>
+
+<!-- 外网设置 -->
+<script type="text/javascript">
+var is_internet_connect = <%=luci.util.is_internet_connect()%>;	
+var is_eth_link = <%=luci.util.is_eth_link()%>;
+set_status_box(is_eth_link,is_internet_connect);
+refrash_eth_box();
+function refrash_eth_box(){
+	$.ajax({
+		  url: "<%=luci.dispatcher.build_url("api", "system","check_network_connect")%>",
+		  cache: false,
+		  dataType: "json",
+		  success: function(rsp){
+			  if(rsp){
+				is_eth_link = rsp.isethlink;
+				is_internet_connect = rsp.isconn;
+				set_status_box(is_eth_link,is_internet_connect);
+			  }
+			  setTimeout("refrash_eth_box()",500);
+		  },
+		  error :function(){
+			  
+		  }
+	});
+}
+
+function set_status_box(link,conn){
+	if(!link){
+		$("#status").show();
+		$("#nolink").show();
+		$("#havconn").hide();
+	} else {
+		if(conn){
+			$("#status").show();
+			$("#nolink").hide();
+			$("#havconn").show();
+		} else {
+			$("#status").hide();
+			$("#nolink").hide();
+			$("#havconn").hide();
+		}
+	}
+}
+
+set_type("<%=typeResp%>");
+function set_type(type){
+	if (type == "pppoe") {
+		$(".pppoe_box").show();
+		$(".static_box").hide();
+	} else if (type == "dhcp") {
+		$(".pppoe_box").hide();
+		$(".static_box").hide();
+	} else if (type == "static") {
+		$(".pppoe_box").hide();
+		$(".static_box").show();
+	}
+}
+$(function(){
+	$("select[name='type']").change(function(){
+		var type_now = $(this).find("option:selected").val();
+		set_type(type_now);
+	})
+	<%
+	if ssid_req then%>
+	$.getJSON("<%=luci.dispatcher.build_url("api", "wifi","restart")%>",{},function(rsp) { })
+	<%
+	--luci.sys.call("sleep 3 && env -i /sbin/wifi >/tmp/2")
+	end
+	%>
+})
+
+	function check_form(obj){
+		$("#error_msg").html("");
+		var network_type = $("select[name='type']").find("option:selected").val();
+		if( network_type=="pppoe" ){
+			//pppoe
+			if(obj.pppoe_name.value==""){
+				$("#error_msg").show();
+				$("#error_msg").html("请输入帐号");
+				obj.pppoe_name.focus();
+				return false;
+			}
+			if(obj.pppoe_passwd.value==""){
+				$("#error_msg").show();
+				$("#error_msg").html("请输入密码");
+				obj.pppoe_passwd.focus();
+				return false;
+			}
+			return true;
+		}
+		
+		if( network_type=="sta" ){
+			//sta
+			if(obj.ssid.value==""){
+				$("#error_msg").show();
+				$("#error_msg").html("请选择一个可用的 无线网络");
+				return false;
+			}
+			
+			return true;
+		}
+					
+		if(network_type=="static"){
+			//ip -> static
+			if(obj.static_ip.value==""){
+				$("#error_msg").show();
+				$("#error_msg").html("请输入 IP 地址");
+				obj.static_ip.focus();
+				return false;
+			}
+			if(!validators.ipaddr(obj.static_ip.value)){
+				$("#error_msg").show();
+				$("#error_msg").html("IP 地址 格式不正确");
+				obj.static_ip.focus();
+				return false;
+			}
+			if(obj.static_mask.value==""){
+				$("#error_msg").show();
+				$("#error_msg").html("请输入子网掩码");
+				obj.static_mask.focus();
+				return false;
+			}
+			if(!validators.ipaddr(obj.static_mask.value)){
+				$("#error_msg").show();
+				$("#error_msg").html("子网掩码格式不正确");
+				obj.static_mask.focus();
+				return false;
+			}
+			if(obj.static_gw.value==""){
+				$("#error_msg").show();
+				$("#error_msg").html("<%:请输入%><%:网关%>");
+				obj.static_gw.focus();
+				return false;
+			}
+			if(!validators.ipaddr(obj.static_gw.value)){
+				$("#error_msg").show();
+				$("#error_msg").html("<%:网关%><%:格式不正确%>");
+				obj.static_gw.focus();
+				return false;
+			}
+			if(obj.static_dns.value==""){
+				$("#error_msg").show();
+				$("#error_msg").html("<%:请输入%>DNS");
+				obj.static_dns.focus();
+				return false;
+			}
+			if(!validators.ipaddr(obj.static_dns.value)){
+				$("#error_msg").show();
+				$("#error_msg").html("DNS <%:格式不正确%>");
+				obj.static_dns.focus();
+				return false;
+			}
+			if(obj.static_dns2.value !="" && !validators.ipaddr(obj.static_dns2.value)){
+				$("#error_msg").show();
+				$("#error_msg").html("DNS <%:格式不正确%>");
+				obj.static_dns2.focus();
+				return false;
+			}
+		}
+			
+		return true;
+	}
+</script>
+</body>
+</html>

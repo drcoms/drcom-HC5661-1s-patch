@@ -1,0 +1,260 @@
+<%
+local ver  = require "luci.version"
+local s = require "luci.tools.status"
+local util  = require "luci.util"
+local deviceReq = "radio0.network1"
+local http = require "luci.http"
+local protocol = require "luci.http.protocol"
+local tw = require "tw"
+local n = require "luci.controller.api.network"
+
+	local sub_action = luci.http.formvalue("sub_action")
+
+	local codeResp_set
+	local msgResp_set
+	local codeResp_set_wifi
+	local msgResp_set_wifi
+	
+	local ssidResp 
+	local encryptionResp 
+	local wifi_keyResp
+	
+	local codeResp = 0
+	local msgResp = "" 
+	local codeResp_wifi = 0
+	local msgResp_wifi = "" 
+	
+	if sub_action == "1" then
+		--------------
+		-- wifi 设置 (wifi set_base)
+		--------------
+		
+		local ssidReq = luci.http.formvalue("ssid")
+		local keyReq = luci.http.formvalue("key")
+		local encryptionReq = luci.http.formvalue("encryption")	
+		local hiddenReq = luci.http.formvalue("hidden")
+		ssidResp = ssidReq
+		encryptionResp = encryptionReq
+		wifi_keyResp = keyReq
+	
+		-- 返回值
+		codeResp_set_wifi = 0
+		msgResp_set_wifi = ""
+
+		-- TODO 
+		-- wep-open 必须为 13位
+		-- psk psk2 形式需要 8位 到 63 位
+		
+		--插入运算代码
+		local netmd = require "luci.model.network".init()
+		local net = netmd:get_wifinet(deviceReq)
+		local req_ok = true
+		
+		if net then
+			
+			-- 关闭  wifi
+			
+			-- 判断参数是否正常
+			if (ssidReq == nil or ssidReq == "") then 
+				req_ok = false
+				codeResp_set_wifi = 311
+			end
+			
+			if (ssidReq:len()>32) then 
+				req_ok = false
+				codeResp_set_wifi = 312
+			end
+	
+			-- 判断参数是否正常
+			if (ssidReq == nil or ssidReq == "") and (encryptionReq == nil or encryptionReq == "") and (keyReq == nil or keyReq == "") then 
+				req_ok = false
+				codeResp_set_wifi = 310
+			end
+			
+			-- 判断 encryption 参数是否合法
+			--if encryptionReq ~= nil and encryptionReq ~= "none" and encryptionReq ~= "psk" and encryptionReq ~= "psk2" and encryptionReq ~= "wep-open" then
+			if encryptionReq ~= nil and encryptionReq ~= "none" and encryptionReq ~= "mixed-psk" then
+				req_ok = false
+				codeResp_set_wifi = 402
+			end
+			
+			-- 判断 key 参数是否合法
+			if encryptionReq ~= nil then
+			
+				if encryptionReq == "psk" or encryptionReq == "psk2" then
+					if  keyReq:len()<8 then 
+						req_ok = false
+						codeResp_set_wifi = 403
+					end
+	
+				elseif encryptionReq == "mixed-psk" then
+					if  keyReq:len()<8 or keyReq:len()>63 then 
+						req_ok = false
+						codeResp_set_wifi = 405
+					end
+				elseif encryptionReq == "wep-open" then
+					if  keyReq:len()~=5 and keyReq:len()~=13 then 
+						req_ok = false
+						codeResp_set_wifi = 404
+					end
+				end
+			end
+			
+			if keyReq:len()>0 and encryptionReq == "none" then
+				req_ok = false
+				codeResp_set_wifi = 406
+			end
+			
+			if req_ok==true then 	--请求正常
+			
+				msgResp_set_wifi = ssidReq
+				
+				-- 开始 set 动作
+				if ssidReq~=nil and ssidReq~="" then 
+					net:set("ssid",ssidReq) 
+				end 
+				
+				if keyReq~=nil then
+					net:set("encryption",encryptionReq)
+					net:set("key",keyReq)
+					if encryptionReq=="none" then
+						net:set("key","")
+					elseif encryptionReq=="wep-open" then
+						net:set("key1","s:"..keyReq)
+						net:set("key",1)
+					end 
+				end
+				
+				if hiddenReq == "1" then
+					net:set("hidden","enable")
+				else 
+					net:set("hidden",nil)
+				end
+			
+				netmd:commit("wireless")
+				netmd:save("wireless")
+				
+			end
+		else 
+			codeResp_set_wifi = 401
+		end 
+		
+		-- 返回值及错误处理
+		if (codeResp_set_wifi == 0) then 		
+			-- 重启放在下一页
+		else 
+			msgResp_set_wifi = luci.util.get_api_error(codeResp_set_wifi)
+		end
+	else
+		_,_,_,ssidResp = util.get_wifi_device_status()
+	end
+	
+	local wifi_ssid_parts = ssidResp.split( ssidResp, "HiWiFi_" )
+	local wifi_ssid_pre,wifi_ssid_real
+	if table.getn(wifi_ssid_parts)>1 then 
+		wifi_ssid_pre = "HiWiFi_"
+		wifi_ssid_real = wifi_ssid_parts[2]
+	else 
+		wifi_ssid_pre = ""
+		wifi_ssid_real = wifi_ssid_parts[1]
+	end
+	
+--------------	
+-- 可选项
+--------------
+local option_wifi_encryption = {
+	{k="none",v="无加密"},
+	{k="mixed-psk",v="强加密(WPA/WPA2个人版)"}
+}
+
+
+-- step go
+if codeResp_set_wifi == 0 then
+	local msgResp_set_wifi_encode = protocol.urlencode(msgResp_set_wifi)
+	local wifi_key_show
+	if keyReq ~="" and keyReq then 
+		wifi_key_show = keyReq
+	else 
+		wifi_key_show = "无"
+	end
+	luci.http.redirect(luci.dispatcher.build_url("admin_mobile","guide_finish").."?ssid="..msgResp_set_wifi_encode)
+end
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>欢迎使用极路由</title>
+<link rel="stylesheet" href="<%=resource%>/mobile/css/first.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body id="step2">
+<div id="page" >
+	<div id="header">
+		<i class="badge">2/2</i>
+		<h1>网络设置完成，<a href="http://www.hiwifi.com/twxredirect/?type=guide&mac=<%http.write(tw.get_mac())%>">立即上网</a></h1>
+	</div><!-- /header -->
+			
+	<div id="content">
+		<div class="box tips">
+			为有效防止蹭网等不安全行为，请您及时修改无线密码。
+		</div>
+		<form id="form1" action="<%=luci.dispatcher.build_url("admin_mobile","guide_wifi")%>" method="post">
+			<label for="ssid">无线网络名称</label>
+			<div class="tl">
+				<div class="txt inline fl">
+					<input type="text" name="ssid_pre" value="<%=wifi_ssid_pre%>">
+				</div>
+				<div class="txt inline fr">
+					<input type="text" name="ssid_real"  value="<%=wifi_ssid_real%>">
+				</div>
+			</div>
+			<input type="hidden" name="ssid" value="<%=wifi_ssid_pre%><%=wifi_ssid_real%>">
+			<label for="n" class="nokey_box">无线网络密码</label>
+			<div class="txt nokey_box">
+				<input type="password" name="key" placeholder="  8-63  位字符、字母（区分大小写）" value="<%=keyReq%>">
+			</div>
+			<div class="checkbox">
+				<label>
+					<input type="checkbox" id="nokey">不设密码
+				</label>
+			</div>
+			<select name="encryption" style="display:none;">
+				<option value="mixed-psk" selected="selected">强加密(WPA/WPA2个人版)</option>
+				<option value="none">无加密</option>
+			</select>
+			<p class="error"></p>
+			<input type="hidden" id="sub_action" value="1" class="txt" name="sub_action" />
+			<input type="button" value="保存" class="btn inline fl" id="submit_btn">
+			<input type="button" class="btn inline grey fr"  onclick="window.location.href='<%=luci.dispatcher.build_url("admin_mobile","guide_finish")%>'" value="跳过"/>
+		</form>
+
+	</div><!-- /content -->
+			
+	<div id="footer">
+		<h3>&copy 北京极科极客科技有限公司 版权所有</h3>
+	</div><!-- /footer -->
+</div><!-- /page -->
+<script type="text/javascript">
+<%if codeResp_set_wifi ~=0 then%>
+$(".error").html("<%=msgResp_set_wifi%>");
+<%end%>
+$("#nokey").click(function(){
+	if($(this).attr('checked')){
+		$(".nokey_box").hide();			
+		$('select[name="encryption"]').val("none");
+	}else{
+		$(".nokey_box").show();
+		$('select[name="encryption"]').val("mixed-psk");
+	}
+})
+
+$("#submit_btn").click(function(){
+	$('input[name="ssid"]').val($('input[name="ssid_pre"]').val()+$('input[name="ssid_real"]').val());
+	$("#form1").submit();
+})
+
+</script>
+</body>
+</html>

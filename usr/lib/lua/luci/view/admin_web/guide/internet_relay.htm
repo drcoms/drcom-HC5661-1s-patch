@@ -1,0 +1,444 @@
+<%
+local ver  = require "luci.version"
+local util  = require "luci.util"
+local deviceReq = "radio0.network1"
+local http = require "luci.http"
+local tw = require "tw"
+local n = require "luci.controller.api.network"
+
+local autotype = luci.util.fliter_unsafe(luci.http.urlencode(luci.http.formvalue("autotype")))
+
+local typeReq
+
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>极路由｜首次安装－上网方式</title>
+<link rel="stylesheet" href="<%=resource%>/guide/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script src="<%=resource%>/guide/js/jquery-1.8.2.min.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/custom_checkbox_and_radio.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/jquery.dropkick-1.0.0.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/application.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+	<div id="page">
+		<div id="header">
+			<h1><span id="logo">极路由｜首次安装</span></h1>
+		</div><!-- /header -->
+		<div id="content">
+			<form id="form" method="post">
+                <p id="type_info"></p>
+                <select value="上网方式" id="s1" class="drop radius" name="type">
+                    <option value="dhcp">自动(DHCP)</option>
+                    <option value="pppoe">宽带拨号</option>
+                    <option value="static">手动</option>
+                    <option value="wisp" selected="selected">无线中继</option>
+                    <option value="nonet">我不需要上网</option>
+                </select>
+				<div class="line"></div>
+				<p>请连接到无线局域网<a id="refresh_ap_list" href="javascript:void(0);" class="short">刷新</a></p>
+				<select id="s2" class="drop radius" name="ssid">
+			  	</select>
+			  	<input type="hidden" name="channel" class="txt" value="">
+                <input type="hidden" name="bssid" class="txt" value="">
+                <input type="hidden" name="encryption" class="txt" value="">
+                <input type="hidden" name="guide" class="txt" value="1">
+				<input type="text" class="txt radius J_wisp_pw" blank="true" maxLength="63" minLength="8" placeholder="密码" name="key" style="display:none" />
+				<p class="error"></p>
+				<p id="net_change_show" style="display:none; background: #FFD400; border-color: #FFD400; color: #000; font-size: 14px;"></p>
+				<a id="submit" href="javascript:void(0);" class="btn radius">连接上网</a>
+			</form>
+
+		</div><!-- /content -->
+				
+		<div id="footer">
+		</div><!-- /footer -->
+	</div><!-- /page -->
+</body>
+<script type="text/javascript">
+var autotype = '<%=autotype%>';
+var codeResp_set = '<%=codeResp_set%>';
+var typeReq = '<%=typeReq%>';
+var setting = false;
+var aplist_cache = new Array();
+var checking = false;
+var check_count = 0;
+var bssid='';
+var timeout = 35000;
+var sec;
+
+function update_type_info(autotype){
+   var autotype_name = '';
+   if(autotype == 'dhcp'){
+    autotype_name = '自动(DHCP)';
+   }else if(autotype == 'pppoe'){
+   autotype_name = '宽带拨号';
+   }else if(autotype == 'static'){
+   autotype_name = '手动';
+   }else if(autotype == 'wisp'){
+   autotype_name = '无线中继';
+   }
+   if(autotype_name==''){
+    $("#type_info").html('');
+   }else{
+    $("#type_info").html('<h2 style="font-size: 1.3em;">检测出<font style="font-weight: bold; color: green;">'+autotype_name+'</font>上网</h2>');
+   }
+}
+
+$(window).load(function() {
+    update_type_info(autotype);
+    $("#s1").change(function(){
+        var type = $("#s1").val();
+        if(type == "dhcp"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "dhcp")%>?autotype='+autotype;
+        }else if(type == "pppoe"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "pppoe")%>?autotype='+autotype;
+        }else if(type == "static"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "static")%>?autotype='+autotype;
+        }else if(type == "wisp"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "wisp")%>?autotype='+autotype;
+        }else if(type == "nonet"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "internet_success")%>'+'?type=nonet&autotype='+autotype;
+        }
+    });
+    
+    $("#s2").change(function(){
+        var selectedIndex = $(this).get(0).selectedIndex;
+        if(selectedIndex < aplist_cache.length){
+            var ap = aplist_cache[selectedIndex];
+            var ssid = ap['ssid'];
+            var key = ap['key'];
+            var encryption = ap['auth'];
+            var channel = ap['channel'];
+            var bssid = ap['bssid'];
+            set_input_val(ssid, key, encryption, channel, bssid);
+            
+            if(encryption == "none"){
+                $("input[name='key']").attr('blank', 'true');
+                $("input[name='key']").hide();
+            }else{
+                $("input[name='key']").attr('blank', 'false');
+                $("input[name='key']").show();
+            }
+        }
+    });
+    
+    $("#submit").click(function(){
+        if($("input[name='bssid']").val() == ''){
+            $(".error").html('请选择无线局域网');
+            return;
+        }
+        $(".J_wisp_pw").lengthCheck({'blurCheck':true,'errorClass':'input-error'});
+        if($(".input-error").size() > 0){
+            return;
+        }
+        if(setting == true){
+           return;
+        }
+        setting = true;
+        $("#submit").html('正在连接中...');
+        $(".error").html('');
+        $("#net_change_show").hide();
+        bssid = $("input[name='bssid']").val();
+        checking = true;
+        sec = Math.ceil(timeout/1000);
+        update_btn();
+        
+        var request_date =  $("#form").serializeArray(); 
+        $.ajax({
+              url: "<%=luci.dispatcher.build_url("api", "wifi","set_bridge")%>",
+              cache: false,
+              type: "POST",
+              dataType: "json",
+              data: request_date,
+              timeout:10000,
+              success: function(rsp){
+                if(rsp.code == 0){
+                   get_wan_info(
+                   function(msg){
+                        link_success();
+                   }, function(msg){
+                        $(".error").html(msg);
+                        $("#submit").html('连接上网');
+                        setting = false;
+                   });
+                }else{
+                    $(".error").html(rsp.msg);
+                    $("#submit").html('连接上网');
+                    setting = false;
+                }
+              },
+              error: function(){
+                $("#submit").html('连接上网');
+                setting = false;
+                
+                $("#net_change_show").show();
+                $("#net_change_show").html('无线重启中，请重新连接');
+                
+                checking = true;
+                check_count = 0;
+                setTimeout("check_network_connect(link_success)", 3000);
+              }
+        });
+    });
+    
+    // TODO
+    /*
+    $("#refresh_ap_list").click(function(){
+        refresh_aplist();
+    });
+    
+    refresh_aplist();
+    */
+});
+
+function update_btn(){
+    if(checking == true){
+        if(sec > 0){
+            var mod = sec % 3;
+            if(mod == 0){
+                $("#submit").html("正在连接中...");
+            }else if(mod == 1){
+                $("#submit").html("正在连接中..");
+            }else if(mod == 2){
+                $("#submit").html("正在连接中.");
+            }else{
+                $("#submit").html("正在连接中...");
+            }
+            setTimeout("update_btn()", 1000);
+            sec = sec - 1;
+        }else{
+            $("#submit").html("连接上网"); 
+        }
+    }else{
+       $("#submit").html("连接上网"); 
+    }
+}
+
+function link_success(){
+    window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide","internet_success")%>';
+}
+
+function check_network_connect(link_success){
+    if(checking != true){
+        return;
+    }
+    check_count ++;
+    if(check_count > 30){
+        $("#net_change_show").html('请确认密码是否正确');
+        $("#submit").html('连接上网');
+        return;
+    }
+    
+    $.ajax({
+      url: "<%=luci.dispatcher.build_url("api", "wifi","get_bridge")%>",
+      cache: false,
+      dataType: "json",
+      success: function(rsp){
+          if(rsp.code == 0){
+            var status = rsp.status;
+            var is_internet_connect = rsp.is_connect;
+            if(bssid == rsp.bssid){
+                if(is_internet_connect == 1 || is_internet_connect == '1'){
+                    checking = false;
+                    if(typeof(link_success) == "function"){
+                        $("#net_change_show").html('设置成功，正在跳转...');
+                        link_success();
+                    }
+                }else{
+                    $("#net_change_show").html('正在检测中继是否正常');
+                    setTimeout("check_network_connect(link_success)", 1000);
+                }
+            }else{
+                checking = false;
+                $("#net_change_show").html('你所中继的网络不是刚才设置的，请确认密码正确');
+                //setTimeout("check_network_connect(link_success)", 1000);
+                $("#submit").html('连接上网');
+            }
+            
+            /*
+            if(is_internet_connect == 1 || is_internet_connect == '1'){
+                if((status == 1 || status == '1') && bssid == rsp.bssid){
+                    checking = false;
+                    if(typeof(link_success) == "function"){
+                        $("#net_change_show").html('设置成功，正在跳转...');
+                        link_success();
+                    }
+                }else{
+                    $("#net_change_show").html('你所连接的网络不是刚才设置的');
+                    setTimeout("check_network_connect(link_success)", 2000);
+                    $("#submit").html('连接上网');
+                }
+            }else{
+                $("#net_change_show").html('正在检测中继是否正常');
+                setTimeout("check_network_connect(link_success)", 2000);
+            }
+            */
+          }else{
+            $("#net_change_show").html('正在检测中继是否正常');
+            setTimeout("check_network_connect(link_success)", 1000);
+          }
+      },
+      error :function(){
+          setTimeout("check_network_connect(link_success)", 1000);
+      }
+    });
+}
+
+function set_input_val(ssid, key, encryption, channel, bssid){
+    $("input[name='encryption']").val(encryption);
+    $("input[name='channel']").val(channel);
+    $("input[name='bssid']").val(bssid);
+    $("input[name='key']").val(key);
+}
+
+function get_wan_info(success, failed){
+    //network/get_wan_info 
+    $.ajax({
+        url: "<%=luci.dispatcher.build_url("api", "network","get_wan_info")%>",
+        cache: false,
+        dataType: "json",
+        success: function(rsp){
+            uptime = rsp.uptime;
+            if(rsp.is_eth_link == 0){
+                failed('网线未插');
+            } else if (rsp.is_internet_link == 0){
+                failed('未连接');
+            } else {
+                success();
+            }
+        },error:function(){
+            failed('get_wan_info error');
+        }
+    });
+}
+
+var update_view;
+var wait_times = 0;
+
+function refresh_aplist(callback){ 
+    update_view = callback;
+    //wifi/wifi_ctl_scan 
+    $("#refresh_ap_list").html('刷新中...');
+    $("#s2").html('');
+    var request_date = {}; 
+    $.getJSON("<%=luci.dispatcher.build_url("api", "wifi","wifi_ctl_scan")%>",request_date,function(rsp) 
+    {
+        if(rsp.code == 0){
+            wait_times = 0;
+            setTimeout("fill_select(update_view)", 3000);
+        }else{
+            if(typeof(update_view) == "function"){
+                update_view();
+            }
+            $("#refresh_ap_list").html('刷新');
+        }
+    }).fail(function(){
+        if(typeof(update_view) == "function"){
+            update_view();
+        }
+        $("#refresh_ap_list").html('刷新');
+    });
+}
+
+function fill_select(update_view){
+    wait_times = wait_times + 1;
+    //wifi/get_aplist 
+    $("#refresh_ap_list").html('刷新中...');
+    $("#s2").html('');
+    aplist_cache = new Array();
+    var request_date = {}; 
+    $.getJSON("<%=luci.dispatcher.build_url("api", "wifi","get_aplist")%>",request_date,function(rsp) 
+    {
+        //生成列表
+        if (rsp.code == 0){
+            var arr_aplist = rsp.aplist; 
+            var inp_v
+            var inp_show
+            var inp_encryption
+            var inp_bssid
+            var inp_key=""
+            var inp_html
+            var need_pwd = 1
+            var rssi_level = 0
+            
+            if(wait_times < 4){
+                if(arr_aplist.length == 0){
+                    setTimeout("fill_select(update_view)", 2000);
+                    return;
+                }
+            }
+            
+            var ap;
+            for (var i=0;i<arr_aplist.length;i++)
+            {
+                ap = arr_aplist[i];
+                inp_v = ap['ssid'];
+                try{
+                    inp_v = decodeURIComponent(inp_v);
+                }catch(e){
+                }
+                if(inp_v == ""){continue;}  // 不支持隐藏 ssid TODO：- 
+                inp_rssi = ap['rssi'];
+                inp_channel = ap['channel'];
+                inp_encryption = ap['auth'];
+                inp_bssid = ap['bssid'];
+                inp_key = ap['key'];
+                if (!inp_key){
+                    inp_key = ""
+                }
+                inp_show = inp_v;
+                if (inp_v == "" || inp_encryption=="wep") {
+                    continue;
+                }
+                
+                if(inp_encryption == "none"){
+                    need_pwd = 0
+                }else{
+                    need_pwd = 1
+                }
+                
+                rssi_level = cal_rssi_level(inp_rssi)
+                try{
+                    if(inp_show.length > 18){
+                        inp_show = inp_show.substr(0, 16)+'..'
+                    }
+                }catch(e){
+                }
+                inp_html = '<option value="'+inp_v+'" rssi="'+rssi_level+'" pw="'+need_pwd+'">'+inp_show+'</option>';
+                
+                aplist_cache.push(ap);
+                //aplist_cache[aplist_cache.length] = ap;
+                $("#s2").append(inp_html);
+                if(i == 0){
+                    set_input_val(inp_v, inp_key, inp_encryption, inp_channel, inp_bssid);
+                }
+            }
+        } else {
+        }
+        if(typeof(update_view) == "function"){
+            update_view();
+        }
+        $("#refresh_ap_list").html('刷新');
+    }).fail(function(){
+        if(typeof(update_view) == "function"){
+            update_view();
+        }
+        $("#refresh_ap_list").html('刷新');
+    });
+}
+
+function cal_rssi_level(rssi){
+    try{
+       var level = Math.ceil(rssi/25);
+       return level;
+    }catch(e){
+       return 0;
+    }
+}
+
+</script>
+</html>

@@ -1,0 +1,112 @@
+<%
+--[[
+	Info	系统设置
+	Author	Wangchao  <wangchao123.com@gmail.com>
+	Copyright	2012
+]]--
+
+local ver  = require "luci.version"
+local is_defult_password = luci.sys.user.checkpasswd("root", "admin")
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="x-ua-compatible" content="IE=9" />
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="format-detection" content="telephone=no" />
+<title>HiWiFi 路由器</title>
+<link rel="stylesheet" href="<%=resource%>/web/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script type="text/javascript" src="<%=resource%>/web/js/jquery-1.8.1.min.js?v=<%=ver.svnRevNum%>"></script>
+<script type="text/javascript" src="<%=resource%>/web/js/artDialog/jquery.artDialog.js?skin=blueskin"></script>
+<script src="<%=resource%>/web/js/artDialog/plugins/iframeTools.source.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+<div class="title">
+	<h2>修改密码<i>路由器后台登录密码</i></h2>
+</div>
+<div class="box wifi_box">
+	
+	<form method="post" id="form1">
+	<div class="group">
+		<div class="form-row" <%if is_defult_password then %>style="display:none;"<%end%>>
+			<label class="label">原密码</label><span><input type="password" name="old_password" value="<%if is_defult_password then %>admin<%end%>" class="txt-input" autocomplete="off"></span>
+		</div>
+		<div class="form-row">
+			<label class="label">新密码</label><span><input type="password" name="password" value="" class="txt-input" autocomplete="off"></span>
+		</div>
+		<div class="form-row">
+			<label class="label">重复新密码</label><span><input type="password" name="password2" value="" class="txt-input" autocomplete="off"></span>
+		</div>
+		<%if is_defult_password then %>
+		<div class="form-row">
+			<img src="<%=resource%>/web/images/alert-icon.png" height="15" /> 密码为 admin, 不安全,请修改
+		</div>
+		<%end%>
+	</div>
+	<div class="button-row form-button">
+		<input type="button" value="<%:保存%>" class="btn" id="submit_btn" style="margin-left: 100px;"/>						
+		<img style="display:none;" id="loading2" src="<%=resource%>/web/js/artDialog/skins/icons/loading.gif" alt="HiWiFi 路由器">
+	</div>
+	</form>
+	<div class="box_line" >　</div>
+</div>
+<script type="text/javascript">
+$(function(){
+	var focus_input = "<%if is_defult_password then %>password<%else%>old_password<%end%>";
+	setTimeout(function(){ $("input[name='"+focus_input+"']").focus() },500);
+
+	//提交
+	$("#submit_btn").click(function(){form_submit();});
+	$("#submit_btn").click(function(){form_submit();});
+	document.onkeydown = function(e){ 
+	var ev = document.all ? window.event : e; 
+		if(ev.keyCode==13) { 
+			form_submit();
+		} 
+	}
+})
+
+function form_submit(){
+	var vo = $("input[name='old_password']").val();
+	var v1 = $("input[name='password']").val();
+	var v2 = $("input[name='password2']").val();
+	
+	if(vo == ""){art.dialog({icon:"error",title:false,content:"旧密码不能为空."}).lock().time(1.5);$("input[name='old_password']").focus();return false;}
+	if(v1 == ""){art.dialog({icon:"error",title:false,content:"新密码不能为空."}).lock().time(1.5);$("input[name='password']").focus();return false;}
+	if(v2 == ""){art.dialog({icon:"error",title:false,content:"重复新密码不能为空."}).lock().time(1.5);$("input[name='password2']").focus();return false;}
+	
+	if(v1 != v2){
+		art.dialog({icon:"error",title:false,content:"两次密码不一致."}).lock().time(1.5);
+		$("input[name='password']").focus();
+		return false;
+	}
+	
+	$("#loading2").show();
+	$("#submit_btn").attr("disabled",true);
+	
+	//system/set_sys_password 
+	var request_date = {}; 
+	var request_date =  $("#form1").serializeArray(); 
+	
+	$.ajax({
+		  url: "<%=luci.dispatcher.build_url("api", "system","set_sys_password")%>",
+		  dataType: 'json',
+		  timeout: 5000, //3 second timeout
+		  type: "POST",
+		  data: request_date,
+		  success: function(rsp,item){
+			  if(rsp.code == 0){
+					window.parent.art.dialog({icon:"succeed",title:false,content:"修改成功  "}).lock().time(2);
+					window.parent.window.parent.reloadpage3s("<%=luci.dispatcher.build_url("admin_web","logout")%>");
+					window.parent.art.dialog.list['func_box'].close();
+				} else {
+					art.dialog({icon:"error",title:false,content:rsp.msg}).lock().time(1.5);
+				}
+				$("#loading2").hide();
+				$("#submit_btn").attr("disabled",false);
+		  }
+	}); 
+}
+</script>
+</body>
+</html>

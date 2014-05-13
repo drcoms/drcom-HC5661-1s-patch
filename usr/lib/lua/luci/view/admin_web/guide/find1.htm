@@ -1,0 +1,289 @@
+<%
+local ver  = require "luci.version"
+local util  = require "luci.util"
+local http = require "luci.http"
+local autotype = util.fliter_unsafe(http.formvalue("autotype"))
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>极路由｜首次安装－全球独创宽带密码找回</title>
+<link rel="stylesheet" href="<%=resource%>/guide/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script src="<%=resource%>/guide/js/jquery-1.8.2.min.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/custom_checkbox_and_radio.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/jquery.dropkick-1.0.0.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/application.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+	<div id="page">
+		<div id="header">
+			<h1><span id="logo">极路由｜首次安装</span></h1>
+		</div><!-- /header -->
+
+		<div id="content">
+			<div id="find_div" class="find">
+				<h2 id="find_info">全球独创宽带密码找回</h2>
+				<p id="link_wan" style="display:none">请将<font style="font-weight: bold; color: red;">宽带线</font>接入WAN口</p>
+				<div class="map"></div>
+				<p class="error"></p>
+				<a id="start_find" href="javascript:void(0);" class="btn radius disabled">请按上图连接网线</a>
+				<a href="<%=luci.dispatcher.build_url("admin_web", "guide", "contact")%>?autotype=<%=autotype%>" class="link">宽带运营商联系电话</a>
+			</div>
+		</div><!-- /content -->
+
+		<div id="footer">
+		</div><!-- /footer -->
+	</div><!-- /page -->
+	
+</body>
+<script type="text/javascript">
+var findsuccess = false;
+var timeout = 66000;
+var check = false;
+var working = false;
+var sec;
+var link_lan = false;
+var link_wan = false;
+var find_times = 0;
+
+$(window).load(function() {
+    start_check_lan();
+    
+    $("#start_find").click(function(){
+        if(findsuccess == true){
+            if(link_wan != true){
+                alert('WAN口网线未插');
+                return;
+            }
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide","pppoe")%>'+'?findsuccess=1&sub_action=1'+'&autotype=<%=autotype%>';
+        }else{
+            find_times = find_times + 1;
+            find_pppoe_account();
+            setTimeout("stop_check()", timeout);
+        }
+    });
+});
+
+function start_check(){
+    check = true;
+    working = true;
+}
+
+function stop_check(){
+    check = false;
+    working = false;
+}
+
+function update_btn(){
+    if(check == true){
+        if(sec > 0){
+            $("#start_find").html("正在检测，请稍候..."+sec+"秒");
+            setTimeout("update_btn()", 1000);
+            sec = sec - 1;
+        }
+    }
+}
+
+//network/find_pppoe_account 
+function find_pppoe_account(){
+    if(link_lan != true){
+        alert('请按上图接好网线');
+        return;
+    }
+    if(working == true){
+        return;
+    }
+    $("#find_info").html("<span class=\"icon checking\">检测中</span>");
+    $("#start_find").html("正在检测，请稍候");
+    $("#start_find").addClass("disabled");
+    $("#link_wan").hide();
+    $("#find_div").removeClass("insert yes find found");
+    $("#find_div").addClass("find yes");
+    $(".error").html("");
+    findsuccess = false;
+    start_check();
+    var wait = Math.ceil(timeout/1000);
+    var data_arr = {"timeout": wait};
+    $.ajax({
+          url: "<%=luci.dispatcher.build_url("api", "network","find_pppoe_account")%>",
+          cache: false,
+          dataType: "json",
+          data: data_arr,
+          success: function(rsp){
+            //working = false;
+        },error :function(rsp){
+            //working = false;
+        }
+    });
+    setTimeout("check_pppoe_account(setfoundsuccess)", 3000);
+    sec = Math.ceil(timeout/1000);
+    update_btn();
+}
+
+//network/check_pppoe_account 
+function check_pppoe_account(setfoundsuccess){
+    if(link_lan != true){
+        return;
+    }
+    if(check != true){
+       findsuccess = false;
+       $("#find_info").html("全球独创宽带密码找回");
+       $("#start_find").html("网线接通，开始找回");
+       $("#start_find").removeClass("disabled");
+       if(find_times > 2){
+        $(".error").html("还是没发现宽带密码，请重试<br/>或者重启旧路由");
+       }else{
+        $(".error").html("未发现宽带密码，请重试");
+       }
+       $("#find_div").removeClass("find insert yes");
+       $("#find_div").addClass("find yes");
+       return;
+    }
+    
+    $.ajax({
+      url: "<%=luci.dispatcher.build_url("api", "network","check_pppoe_account")%>",
+      cache: false,
+      dataType: "json",
+      success: function(rsp){
+            var success = false;
+            if(rsp.code == 0){
+                var username = rsp.username;
+                var password = rsp.password;
+                if(username && username.length > 0){
+                    success = true;
+                }
+            }
+            
+            if(success == true){
+               setfoundsuccess();
+            }else{
+               setTimeout("check_pppoe_account(setfoundsuccess)", 2000);
+            }
+        },error :function(rsp){
+           setTimeout("check_pppoe_account(setfoundsuccess)", 2000);
+        }
+    });
+}
+
+function setfoundsuccess(){
+   findsuccess = true;
+   stop_check();
+   check_network_connect(link_wan_success, link_wan_fail);
+}
+
+function start_check_lan(){
+    getLanInfo(function(){
+       if(findsuccess != true && check != true){
+           $("#find_info").html("全球独创宽带密码找回");
+           $("#start_find").html("网线接通，开始找回");
+           $("#start_find").removeClass("disabled");
+           $("#find_div").removeClass("find insert yes");
+           $("#find_div").addClass("find yes");
+       }
+       setTimeout("start_check_lan()", 2000);
+       link_lan = true;
+    }, function(){
+        if(findsuccess != true){
+            $("#find_info").html("全球独创宽带密码找回");
+            $("#start_find").html("请按上图连接网线");
+            $("#start_find").addClass("disabled");
+            $("#link_wan").hide();
+            $("#find_div").removeClass("yes");
+        }
+        setTimeout("start_check_lan()", 2000);
+        link_lan = false;
+        stop_check();
+    })
+}
+
+function getLanInfo(success_callback, unlink_callback){
+    if(findsuccess == true){
+        return;
+    }
+    //network/get_lan_info 
+    $.getJSON("<%=luci.dispatcher.build_url("api", "network","get_lan_info")%>",{},function(rsp) 
+    { 
+        if(rsp.code == 0){
+            var has_link = false;
+            for(var i in rsp.is_lan_link){
+            //i 为索引数字
+                var lan_index = i.substr(4,1);
+                var lan_status = rsp.is_lan_link[i];
+                if(lan_status == 1){
+                    has_link = true;
+                    break;
+                }
+            }
+            if(has_link == true){
+                if(typeof(success_callback) == "function"){
+                    success_callback();
+                }
+            }else{
+                if(typeof(unlink_callback) == "function"){
+                    unlink_callback();
+                }
+            }
+        }else{
+            console.log('获取lan口信息错误');
+        }
+    }).fail(function(){
+        console.log('获取lan口信息错误');
+    });
+}
+
+function link_wan_success(){
+   link_wan = true;
+   $("#link_wan").show();
+   $("#start_find").removeClass("disabled");
+   $("#find_info").html("<span class=\"icon success\">账号获取成功</span>");
+   $("#start_find").html("去拨号上网");
+   $("#find_div").removeClass("find insert yes found");
+   $("#find_div").addClass("find");
+   $("#find_div").addClass("found");
+}
+
+function link_wan_fail(){
+   link_wan = false;
+   $("#link_wan").show();
+   $("#find_info").html("<span class=\"icon success\">账号获取成功</span>");
+   $("#start_find").html("请将宽带网线插到极路由WAN口");
+   $("#start_find").addClass("disabled");
+   $("#find_div").removeClass("find insert yes found");
+   $("#find_div").addClass("find");
+   $("#find_div").addClass("found");
+}
+
+function check_network_connect(link_wan_success, link_wan_fail){
+    $.ajax({
+      url: "<%=luci.dispatcher.build_url("api", "system","check_network_connect")%>",
+      cache: false,
+      dataType: "json",
+      success: function(rsp){
+          if(rsp.code == 0){
+            var is_eth_link = rsp.isethlink;
+            if(is_eth_link == 1 || is_eth_link == '1'){
+                if(typeof(link_wan_success) == "function"){
+                    link_wan_success();
+                }
+            }else{
+                if(typeof(link_wan_fail) == "function"){
+                    link_wan_fail();
+                }
+            }
+          }else{
+            if(typeof(link_wan_fail) == "function"){
+                link_wan_fail();
+            }
+          }
+          setTimeout("check_network_connect(link_wan_success, link_wan_fail)", 1500);
+      },
+      error :function(){
+          setTimeout("check_network_connect(link_wan_success, link_wan_fail)", 1500);
+      }
+    });
+}
+
+</script>
+</html>

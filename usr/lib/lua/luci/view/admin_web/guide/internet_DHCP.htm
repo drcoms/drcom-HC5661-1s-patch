@@ -1,0 +1,212 @@
+<%
+local ver  = require "luci.version"
+local util  = require "luci.util"
+local http = require "luci.http"
+
+local autotype = util.fliter_unsafe(http.formvalue("autotype"))
+local peerdnsReq = http.formvalue("peerdns")
+local override_dnsReq = http.formvalue("override_dns")
+local override_dns2Req = http.formvalue("override_dns2")
+
+%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>极路由｜首次安装－上网方式</title>
+<link rel="stylesheet" href="<%=resource%>/guide/css/style.css?v=<%=ver.svnRevNum%>" type="text/css"/>
+<script src="<%=resource%>/guide/js/jquery-1.8.2.min.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/custom_checkbox_and_radio.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/jquery.dropkick-1.0.0.js?v=<%=ver.svnRevNum%>"></script>
+<script src="<%=resource%>/guide/js/application.js?v=<%=ver.svnRevNum%>"></script>
+</head>
+<body>
+	<div id="page">
+		<div id="header">
+			<h1><span id="logo">极路由｜首次安装</span></h1>
+		</div><!-- /header -->
+				
+		<div id="content">
+			<div class="insert yes">
+				<p id="type_info"></p>
+				<form id="form" method="post">
+                <select value="上网方式" id="s1" class="drop radius" name="type">
+                    <option value="dhcp" selected="selected">自动(DHCP)</option>
+                    <option value="pppoe">宽带拨号</option>
+                    <option value="static">手动</option>
+                    <option value="wisp">无线中继</option>
+                    <option value="nonet">我不需要上网</option>
+                </select>
+				<div class="line"></div>
+				<label class="checkbox J_checkbox" for="checkbox" style="display:none">
+	            	<input type="checkbox" value="0" <% if peerdnsReq == "0" then %>checked<% else %><% end %> id="checkbox" name="peerdns">自定义DNS服务器
+				</label>
+                <div class="J_form" <% if peerdnsReq == "0" then %><% else %>style="display: none"<% end %>  style="display:none">
+					<input type="text" class="txt radius" placeholder="DNS1" name="override_dns" value="<%=override_dnsReq%>">
+					<input type="text" class="txt radius" placeholder="DNS2" name="override_dns2" value="<%=override_dns2Req%>">
+                </div>
+				</form>
+				<p class="error"></p>
+				<a id="submit" href="javascript:void(0);"  class="btn radius">连接上网</a>
+			</div>
+		</div><!-- /content -->
+				
+		<div id="footer">
+		</div><!-- /footer -->
+	</div><!-- /page -->
+
+    <script type="text/javascript">
+        if($('.J_checkbox').length){
+            $(".J_checkbox").prepend("<span class='icon'></span><span class='icon-to-fade'></span>");
+            $(".J_checkbox").click(function(){
+                var $this =$(this);
+                setupLabel();
+                if($this.find('input:checked').length){
+                    $('.J_form').show();
+                }else{
+                    $('.J_form').hide()
+                }
+            });
+            setupLabel();
+        }
+    </script>
+</body>
+
+<script type="text/javascript">
+var autotype = '<%=autotype%>';
+var codeResp_set = '<%=codeResp_set%>';
+var setting = false;
+var timeout = 15000;
+var sec;
+
+function update_type_info(autotype){
+   var autotype_name = '';
+   if(autotype == 'dhcp'){
+    autotype_name = '自动(DHCP)';
+   }else if(autotype == 'pppoe'){
+   autotype_name = '宽带拨号';
+   }else if(autotype == 'static'){
+   autotype_name = '手动';
+   }else if(autotype == 'wisp'){
+   autotype_name = '无线中继';
+   }
+   if(autotype_name==''){
+    $("#type_info").html('');
+   }else{
+    $("#type_info").html('<h2 style="font-size: 1.3em;">检测出<font style="font-weight: bold; color: green;">'+autotype_name+'</font>上网</h2>');
+   }
+}
+
+$(window).load(function() {
+    update_type_info(autotype);
+    $("#s1").change(function(){
+        var type = $("#s1").val();
+        if(type == "dhcp"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "dhcp")%>?autotype='+autotype;
+        }else if(type == "pppoe"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "pppoe")%>?autotype='+autotype;
+        }else if(type == "static"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "static")%>?autotype='+autotype;
+        }else if(type == "wisp"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "wisp")%>?autotype='+autotype;
+        }else if(type == "nonet"){
+            window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide", "internet_success")%>'+'?type=nonet&autotype='+autotype;
+        }
+    });
+    
+    $("#submit").click(function(){
+        form_submit();
+    });
+});
+
+function form_submit(){
+    if(setting == true){
+       return;
+    }
+    setting = true;
+    $("#submit").html('正在连接中...');
+    $(".error").html('');
+    
+    sec = Math.ceil(timeout/1000);
+    update_btn();
+   
+    var request_date =  $("#form").serializeArray(); 
+    $.post("<%=luci.dispatcher.build_url("api", "network","set_wan_connect")%>",request_date,function(rsp) 
+    {
+        if(rsp.code == 0){
+           setTimeout("check_wan()", 1000);
+           sec = Math.ceil(timeout/1000);
+           update_btn();
+        } else {
+           $(".error").html('设置失败');
+           $("#submit").html('连接上网');
+           setting = false;
+        }
+    }).error(function() {
+        $(".error").html('设置失败');
+        $("#submit").html('连接上网');
+        setting = false;
+    });
+}
+
+function update_btn(){
+    if(setting == true){
+        if(sec > 0){
+            var mod = sec % 3;
+            if(mod == 0){
+                $("#submit").html("正在连接中...");
+            }else if(mod == 1){
+                $("#submit").html("正在连接中..");
+            }else if(mod == 2){
+                $("#submit").html("正在连接中.");
+            }else{
+                $("#submit").html("正在连接中...");
+            }
+            setTimeout("update_btn()", 1000);
+            sec = sec - 1;
+        }else{
+            $("#submit").html("连接上网");
+        }
+    }else{
+        $("#submit").html("连接上网");
+    }
+}
+
+function check_wan(){
+    get_wan_info(function(msg){
+        window.location.href='<%=luci.dispatcher.build_url("admin_web", "guide","internet_success")%>';
+   }, function(msg){
+        if(setting == true){
+            setTimeout("check_wan()", 1000);
+        }
+        if(sec <= 0 || setting == false){
+            $(".error").html(msg);
+            $("#submit").html('连接上网');
+        }
+   });
+}
+
+function get_wan_info(success_callback, failed_callback){
+    //network/get_wan_info 
+    $.ajax({
+        url: "<%=luci.dispatcher.build_url("api", "system","check_network_connect")%>",
+        cache: false,
+        dataType: "json",
+        success: function(rsp){
+            if(rsp.isethlink == 0){
+                setting = false;
+                failed_callback('网线未插');
+            } else if (rsp.isconn == 0){
+                failed_callback('连接超时，请重试');
+            } else {
+                success_callback();
+            }
+        },error:function(){
+            failed_callback('');
+        }
+    });
+}
+
+</script>
+</html>
