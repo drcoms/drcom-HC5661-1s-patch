@@ -2,7 +2,7 @@
 import socket, struct, time
 from hashlib import md5
 import sys
-import urllib2
+import os
 
 class ChallengeException (Exception):
   def __init__(self):
