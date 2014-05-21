@@ -9,6 +9,8 @@ DrCOM FOR HC5661
 [下载连接](http://www.hiwifimi.com/root/%E6%9E%81%E5%A3%B9s2446root.zip)<br>
 或者可以手动开启ssh，办法请参考[将固件中ssh开启][sshon]
 
+*如果您的学校是 PPPOE 拨号和 DrCOM 双重认证，请您先在路由器上设置相应的拨号配置*
+
 * 修改/etc/drcom.conf中的认证地址，用户名，密码，和在网络中心注册时填写的mac，注意mac按范例格式写
 
 ```python
