@@ -20,7 +20,7 @@ SALT = ''
 CONF = "/etc/drcom.conf"
 UNLIMITED_RETRY = True
 EXCEPTION = False
-DEBUG = True #log saves to file
+DEBUG = False #log saves to file
 LOG_PATH = '/var/log/drcom_client.log'
 
 
