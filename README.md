@@ -107,7 +107,7 @@ python /usr/bin/wired.py
 
 # Tricks
 
-可以在 `/etc/inittab` 中加入 `::respawn:/usr/bin/dog_drcom` 来防止 **dog_drcom** 挂掉。
+可以在 `/etc/inittab` 中加入 `::respawn:/usr/bin/dog_drcom` 来防止 *dog_drcom* 挂掉。
 
 [sshon]: http://wenku.baidu.com/view/056fceb84693daef5ff73d15.html
 [wiki]: https://github.com/drcoms/HC5661-1s-patch/wiki/-etc-drcom.conf%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9
