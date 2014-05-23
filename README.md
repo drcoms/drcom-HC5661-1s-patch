@@ -5,6 +5,7 @@ DrCOM FOR HC5661
 * 请先确保在PC上使用 *drcom-generic-debug-u62.py* 测试可以上网以后再考虑本补丁
 * 所有风险由使用者承担，作者不承担任何法律责任，否则请您不要使用
 
+有关其他可以让程序运行的更美好的办法可以参考 README 尾部 <br>
 首先，刷打开了ssh的固件，通俗说为root （详细参考www.hiwifimi.com)，版本 0.9003.2446s
 [下载连接](http://www.hiwifimi.com/root/%E6%9E%81%E5%A3%B9s2446root.zip)<br>
 或者可以手动开启ssh，办法请参考[将固件中ssh开启][sshon]
@@ -103,6 +104,10 @@ python /usr/bin/wired.py
 * 停止截包，将封包保存，连同您的账号密码，ip信息，网络环境等发至[我的邮箱][mail]
 
 我看到邮件后会找时间与您联系。
+
+# Tricks
+
+可以在 `/etc/inittab` 中加入 `::respawn:/usr/bin/dog_drcom` 来防止** dog_drcom **挂掉。
 
 [sshon]: http://wenku.baidu.com/view/056fceb84693daef5ff73d15.html
 [wiki]: https://github.com/drcoms/HC5661-1s-patch/wiki/-etc-drcom.conf%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9
