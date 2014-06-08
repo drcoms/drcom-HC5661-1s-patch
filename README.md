@@ -1,6 +1,10 @@
 DrCOM FOR HC5661
 ------------------
 
+# Preface
+[可以试试这个打包好的？](http://pan.baidu.com/s/1jGLvk94)
+
+
 # 警告
 * 请先确保在PC上使用 *drcom-generic-debug-u62.py* 测试可以上网以后再考虑本补丁
 * 所有风险由使用者承担，作者不承担任何法律责任，否则请您不要使用
