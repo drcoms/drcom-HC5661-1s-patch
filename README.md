@@ -4,6 +4,9 @@ DrCOM FOR HC5661
 # Preface
 [可以试试这个打包好的？](http://pan.baidu.com/s/1jGLvk94)
 
+注意对上面这个,对于 0.9004.xxxx 的同学请自行降级到 0.9003.2446s, 或者请自行批量替换 mmcblk0p1 为 mmcblk0p2 <br>
+9004固件不稳定, 对于校园网9003固件足矣, 本人不提供9004固件的技术支持, 请见谅.
+
 
 # 警告
 * 请先确保在PC上使用 *drcom-generic-debug-u62.py* 测试可以上网以后再考虑本补丁
