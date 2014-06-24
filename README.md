@@ -1,6 +1,11 @@
 DrCOM FOR HC5661
 ------------------
 
+# 保持更新的区域
+
+u60用户如果不能用请参考这个Issue:<https://github.com/drcoms/HC5661-1s-patch/issues/1>
+
+
 # Preface
 [可以试试这个打包好的？](http://pan.baidu.com/s/1jGLvk94)
 
