@@ -1,8 +1,6 @@
-# 1.Please edit this file in editors which supports UNIX files if you are in Windows OS
-# 2.tested pass in v0.8 u62R0
+# 1.Please edit this file in editors which supports UNIX files if you are using Windows OS
+# 2.tests passed on v0.8 u62R0
 # 3.edit basic configuration first.
-# 4.if you can use it to access Internet stablely, contacting administrators.
-#   else contacting administrators with drcom_client.log
 
 import socket, struct, time
 from hashlib import md5
@@ -26,14 +24,15 @@ UNLIMITED_RETRY = True
 EXCEPTION = False
 DEBUG = True
 # basic configuration
-server = "192.168.100.150" # Auth server ip
+server = "192.168.100.150"  # Auth server ip
 username = ""
 password = ""
 host_name = "LIYUANYUAN"
 host_os = "8089D"
-host_ip = "10.30.22.17" # your ip, the server wouldn't check this, so it's a nonsense 
+host_ip = "10.30.22.17"
+mac_flag = "\x01"  # \x01 for no binding \x02 for mac-ip binding
 dhcp_server = "0.0.0.0"
-mac = 0xb888e3051680
+mac = 0x123456789012
 
 def log(*args, **kwargs):
     s = ' '.join(args)
@@ -203,8 +202,8 @@ def mkpkt(salt, usr, pwd, mac):
     data = '\x03\x01\x00'+chr(len(usr)+20)
     data += md5sum('\x03\x01'+salt+pwd)
     data += usr.ljust(36, '\x00')
-    data += '\x20' #fixed unknow 1
-    data += '\x02' #unknow 2
+    data += '\x20' #client version, \x20 for U62, \x0c for U60
+    data += '\x02' #mac flag: 1 for no any binding, 2 for mac-ip binding
     data += dump(int(data[4:10].encode('hex'),16)^mac).rjust(6,'\x00') #mac xor md51
     data += md5sum("\x01" + pwd + salt + '\x00'*4) #md52
     data += '\x01' # number of ip
