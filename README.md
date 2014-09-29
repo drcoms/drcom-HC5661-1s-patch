@@ -1,6 +1,9 @@
 DrCOM FOR HC5661
 ------------------
 
+*如果你愿意捐助作者这个穷屌, 支付宝: latyas@live.com*
+
+
 # 保持更新的区域
 
 u60用户如果不能用请参考这个Issue:<https://github.com/drcoms/HC5661-1s-patch/issues/1>
