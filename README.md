@@ -124,6 +124,13 @@ python /usr/bin/wired.py
 
 可以在 `/etc/inittab` 中加入 `::respawn:/usr/bin/dog_drcom` 来防止 *dog_drcom* 挂掉。
 
+# 许可证
+
+GPLv2
+
+特别指出禁止任何个人或者公司将 [drcoms](http://github.com/drcoms/) 的代码投入商业使用，由此造成的后果和法律责任均与本人无关。 
+
 [sshon]: http://wenku.baidu.com/view/056fceb84693daef5ff73d15.html
 [wiki]: https://github.com/drcoms/HC5661-1s-patch/wiki/-etc-drcom.conf%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9
 [mail]: latyas@gmail.com
+[drcoms]: https://github.com/drcoms
