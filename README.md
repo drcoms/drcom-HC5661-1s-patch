@@ -66,9 +66,10 @@ mac = 0xb888e3051680 # 学校绑定的mac地址，注意按照左边的格式写
 复制以下文件(夹)到路由器上相同目录
 
 ```
-/usr
+/usr/bin
+/usr/lib/python2.7
 /etc/drcom.conf
-/etc/opkg.conf
+/etc/opkg.conf (适用于mt7620的源，极壹等ar71xx请不要复制，或者替换源http://downloads.openwrt.org/attitude_adjustment/12.09/ar71xx/generic/packages/)
 ```
 
 * 在ssh下执行下列命令(windows下可用putty连接)
