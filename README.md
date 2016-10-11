@@ -1,8 +1,6 @@
 DrCOM FOR HC5661
 ------------------
 
-*如果你愿意捐助作者这个穷屌, 支付宝: latyas@live.com*
-
 强烈建议先看看 https://github.com/drcoms/generic 里的 wiki
 
 `/usr/bin/wired.py` 可能不是最新的，请访问<https://github.com/drcoms/generic/blob/master/latest-wired.py> 以获得最新代码
@@ -14,7 +12,6 @@ u60用户如果不能用请参考这个Issue:<https://github.com/drcoms/HC5661-1
 
 
 # Preface
-[可以试试这个打包好的？](http://pan.baidu.com/s/1jGLvk94)
 
 注意对上面这个,对于 0.9004.xxxx 的同学请自行降级到 0.9003.2446s, 或者请自行批量替换 mmcblk0p1 为 mmcblk0p2 <br>
 9004固件不稳定, 对于校园网9003固件足矣, 本人不提供9004固件的技术支持, 请见谅.
